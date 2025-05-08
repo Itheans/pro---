@@ -30,4 +30,46 @@ class UserDataFix {
       print("เกิดข้อผิดพลาดในการอัปเดต SearchKey: $e");
     }
   }
+
+  static Future<void> fixReviewUserInfo() async {
+    try {
+      // ดึงข้อมูลรีวิวทั้งหมด
+      QuerySnapshot reviews =
+          await FirebaseFirestore.instance.collection("reviews").get();
+
+      // วนลูปแต่ละรีวิว
+      for (var reviewDoc in reviews.docs) {
+        Map<String, dynamic> reviewData =
+            reviewDoc.data() as Map<String, dynamic>;
+        String userId = reviewData['userId'] ?? '';
+
+        if (userId.isNotEmpty) {
+          // ดึงข้อมูลผู้ใช้
+          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+              .collection("users")
+              .doc(userId)
+              .get();
+
+          if (userDoc.exists) {
+            Map<String, dynamic> userData =
+                userDoc.data() as Map<String, dynamic>;
+
+            // อัพเดทรีวิวด้วยข้อมูลผู้ใช้
+            await FirebaseFirestore.instance
+                .collection("reviews")
+                .doc(reviewDoc.id)
+                .update({
+              'userName': userData['name'] ?? '',
+              'userPhoto': userData['photo'] ?? '',
+            });
+
+            print("อัปเดตข้อมูลผู้ใช้ในรีวิว ID: ${reviewDoc.id}");
+          }
+        }
+      }
+      print("อัปเดตข้อมูลผู้ใช้ในรีวิวเสร็จสิ้น");
+    } catch (e) {
+      print("เกิดข้อผิดพลาดในการอัปเดตข้อมูลผู้ใช้ในรีวิว: $e");
+    }
+  }
 }

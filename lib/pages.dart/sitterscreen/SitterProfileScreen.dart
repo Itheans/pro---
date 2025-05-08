@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -526,6 +528,61 @@ class _SitterProfileScreenState extends State<SitterProfileScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildReviewsList() {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _reviews.length,
+      separatorBuilder: (context, index) => const Divider(),
+      itemBuilder: (context, index) {
+        final review = _reviews[index];
+        return ListTile(
+          leading: review.userPhoto.isNotEmpty
+              ? CircleAvatar(
+                  backgroundImage: NetworkImage(review.userPhoto),
+                )
+              : const CircleAvatar(
+                  child: Icon(Icons.person),
+                ),
+          title: Row(
+            children: [
+              Text(
+                review.userName.isNotEmpty
+                    ? review.userName
+                    : 'ผู้ใช้ ${review.userId.substring(0, min(5, review.userId.length))}...',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(width: 8),
+              RatingBarIndicator(
+                rating: review.rating,
+                itemBuilder: (context, _) => const Icon(
+                  Icons.star,
+                  color: Colors.amber,
+                ),
+                itemCount: 5,
+                itemSize: 16,
+              ),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(review.comment),
+                SizedBox(height: 4),
+                Text(
+                  _formatDate(review.timestamp),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

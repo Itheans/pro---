@@ -10,6 +10,8 @@ class Review {
   final double rating;
   final String comment;
   final DateTime timestamp;
+  final String userName; // เพิ่มฟิลด์ userName
+  final String userPhoto; // เพิ่มฟิลด์ userPhoto
 
   Review({
     required this.id,
@@ -17,6 +19,8 @@ class Review {
     required this.rating,
     required this.comment,
     required this.timestamp,
+    this.userName = '', // กำหนดค่าเริ่มต้น
+    this.userPhoto = '', // กำหนดค่าเริ่มต้น
   });
 
   factory Review.fromFirestore(DocumentSnapshot doc) {
@@ -48,6 +52,8 @@ class Review {
           (data['rating'] is num) ? (data['rating'] as num).toDouble() : 0.0,
       comment: data['comment'] ?? '',
       timestamp: timestamp,
+      userName: data['userName'] ?? '', // ดึงข้อมูล userName
+      userPhoto: data['userPhoto'] ?? '', // ดึงข้อมูล userPhoto
     );
   }
 
@@ -57,6 +63,8 @@ class Review {
       'rating': rating,
       'comment': comment,
       'timestamp': FieldValue.serverTimestamp(),
+      'userName': userName, // เพิ่ม userName
+      'userPhoto': userPhoto, // เพิ่ม userPhoto
     };
   }
 }
@@ -519,8 +527,8 @@ class _ReviewsPageState extends State<ReviewsPage> {
 
       final newReview = {
         'userId': currentUser.uid,
-        'userName': userName,
-        'userPhoto': userPhoto,
+        'userName': userName, // บันทึกชื่อผู้ใช้
+        'userPhoto': userPhoto, // บันทึกรูปโปรไฟล์ผู้ใช้
         'sitterId': widget.sitterId,
         'rating': _rating,
         'comment': _commentController.text.trim(),
@@ -920,12 +928,15 @@ class _ReviewsPageState extends State<ReviewsPage> {
           children: [
             Row(
               children: [
+                // แสดงรูปโปรไฟล์ผู้ใช้
                 CircleAvatar(
                   backgroundColor: Colors.orange.shade100,
-                  child: const Icon(
-                    Icons.person,
-                    color: Colors.orange,
-                  ),
+                  backgroundImage: review.userPhoto.isNotEmpty
+                      ? NetworkImage(review.userPhoto)
+                      : null,
+                  child: review.userPhoto.isEmpty
+                      ? const Icon(Icons.person, color: Colors.orange)
+                      : null,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -933,7 +944,10 @@ class _ReviewsPageState extends State<ReviewsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'ผู้ใช้ ${review.userId.substring(0, 5)}...',
+                        // แสดงชื่อผู้ใช้ หรือ ID บางส่วนถ้าไม่มีชื่อ
+                        review.userName.isNotEmpty
+                            ? review.userName
+                            : 'ผู้ใช้ ${review.userId.length > 5 ? review.userId.substring(0, 5) : review.userId}...',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                         ),
