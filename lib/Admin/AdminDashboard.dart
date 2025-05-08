@@ -1,0 +1,582 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
+import 'package:myproject/Admin/SitterVerificationPage.dart';
+import 'package:myproject/Admin/BookingManagementPage.dart';
+import 'package:myproject/Admin/BookingDetailPage.dart';
+import 'package:myproject/Admin/BookingManagementPage.dart';
+import 'package:myproject/Admin/SitterVerificationPage.dart';
+
+class AdminDashboard extends StatefulWidget {
+  const AdminDashboard({Key? key}) : super(key: key);
+
+  @override
+  _AdminDashboardState createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> {
+  bool _isLoading = true;
+  int _totalUsers = 0;
+  int _totalSitters = 0;
+  int _pendingSitters = 0;
+  int _totalBookings = 0;
+  int _pendingBookings = 0;
+  int _completedBookings = 0;
+  double _totalRevenue = 0;
+  List<DocumentSnapshot> _recentBookings = [];
+  int _pendingNotifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // โหลดข้อมูลผู้ใช้
+      final usersSnapshot =
+          await FirebaseFirestore.instance.collection('users').get();
+
+      // โหลดข้อมูลผู้รับเลี้ยงแมว
+      final sittersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'sitter')
+          .get();
+
+      // โหลดข้อมูลผู้รับเลี้ยงแมวที่รอการอนุมัติ
+      final pendingSittersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'sitter')
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      // โหลดข้อมูลการจอง
+      final bookingsSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .orderBy('createdAt', descending: true)
+          .limit(5)
+          .get();
+
+      // โหลดข้อมูลการจองที่รอดำเนินการ
+      final pendingBookingsSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('status', isEqualTo: 'pending')
+          .get();
+
+      // โหลดข้อมูลการจองที่เสร็จสิ้น
+      final completedBookingsSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      // โหลดข้อมูลการแจ้งเตือนที่ยังไม่ได้อ่าน
+      final notificationsSnapshot = await FirebaseFirestore.instance
+          .collection('admin_notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      // คำนวณรายได้ทั้งหมด
+      double totalRevenue = 0;
+      for (var doc in completedBookingsSnapshot.docs) {
+        Map<String, dynamic> data = doc.data();
+        if (data.containsKey('totalPrice')) {
+          totalRevenue += (data['totalPrice'] is int)
+              ? (data['totalPrice'] as int).toDouble()
+              : (data['totalPrice'] as double);
+        }
+      }
+
+      setState(() {
+        _totalUsers = usersSnapshot.docs.length;
+        _totalSitters = sittersSnapshot.docs.length;
+        _pendingSitters = pendingSittersSnapshot.docs.length;
+        _totalBookings = bookingsSnapshot.docs.length;
+        _pendingBookings = pendingBookingsSnapshot.docs.length;
+        _completedBookings = completedBookingsSnapshot.docs.length;
+        _totalRevenue = totalRevenue;
+        _recentBookings = bookingsSnapshot.docs;
+        _pendingNotifications = notificationsSnapshot.docs.length;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading dashboard data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล: $e')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('แดชบอร์ดผู้ดูแลระบบ'),
+        backgroundColor: Colors.deepOrange,
+        actions: [
+          if (_pendingNotifications > 0)
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.notifications),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AdminNotificationsPage(),
+                      ),
+                    ).then((_) => _loadDashboardData());
+                  },
+                  tooltip: 'การแจ้งเตือน',
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    padding: EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      _pendingNotifications.toString(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadDashboardData,
+            tooltip: 'รีเฟรชข้อมูล',
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ข้อความต้อนรับ
+                  Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    color: Colors.deepOrange.shade50,
+                    elevation: 2,
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: Colors.deepOrange,
+                            radius: 25,
+                            child: Icon(
+                              Icons.admin_panel_settings,
+                              color: Colors.white,
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ยินดีต้อนรับ, แอดมิน!',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.deepOrange.shade800,
+                                  ),
+                                ),
+                                Text(
+                                  DateFormat('EEEE, d MMMM yyyy')
+                                      .format(DateTime.now()),
+                                  style: TextStyle(
+                                    color: Colors.deepOrange.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (_pendingSitters > 0)
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          SitterVerificationPage()),
+                                ).then((_) => _loadDashboardData());
+                              },
+                              icon: Icon(Icons.pending_actions),
+                              label: Text('$_pendingSitters คำขอรออนุมัติ'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepOrange,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 20),
+
+                  // สรุปข้อมูลสำคัญ
+                  Text(
+                    'ภาพรวมระบบ',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 1.5,
+                    children: [
+                      _buildStatCard(
+                        'ผู้ใช้ทั้งหมด',
+                        _totalUsers.toString(),
+                        Icons.people,
+                        Colors.blue,
+                      ),
+                      _buildStatCard(
+                        'ผู้รับเลี้ยงแมว',
+                        _totalSitters.toString(),
+                        Icons.pets,
+                        Colors.deepOrange,
+                      ),
+                      _buildStatCard(
+                        'การจองทั้งหมด',
+                        _totalBookings.toString(),
+                        Icons.list_alt,
+                        Colors.purple,
+                      ),
+                      _buildStatCard(
+                        'รายได้ทั้งหมด',
+                        '${NumberFormat("#,##0.00").format(_totalRevenue)} บาท',
+                        Icons.monetization_on,
+                        Colors.green,
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+
+                  // รายการคำขอล่าสุด
+                  if (_pendingSitters > 0) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'คำขอเป็นผู้รับเลี้ยงแมวรออนุมัติ',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) =>
+                                      SitterVerificationPage()),
+                            ).then((_) => _loadDashboardData());
+                          },
+                          child: Text('ดูทั้งหมด'),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    Card(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      elevation: 2,
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'คำขอรออนุมัติ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  '$_pendingSitters รายการ',
+                                  style: TextStyle(
+                                    color: Colors.deepOrange,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.warning, color: Colors.amber),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'มีคำขอเป็นผู้รับเลี้ยงแมวรออนุมัติ $_pendingSitters รายการ กรุณาตรวจสอบและดำเนินการโดยเร็ว',
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          SitterVerificationPage()),
+                                ).then((_) => _loadDashboardData());
+                              },
+                              icon: Icon(Icons.arrow_forward),
+                              label: Text('ไปที่หน้าตรวจสอบและอนุมัติ'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.deepOrange,
+                                foregroundColor: Colors.white,
+                                minimumSize: Size(double.infinity, 45),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 20),
+                  ],
+
+                  // รายการจองล่าสุด
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'การจองล่าสุด',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => BookingManagementPage(),
+                            ),
+                          ).then((_) => _loadDashboardData());
+                        },
+                        child: Text('ดูทั้งหมด'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 10),
+                  _recentBookings.isEmpty
+                      ? Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          elevation: 2,
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Center(
+                              child: Text(
+                                'ไม่มีการจองล่าสุด',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: _recentBookings.map((booking) {
+                            Map<String, dynamic> bookingData =
+                                booking.data() as Map<String, dynamic>;
+                            return Card(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              elevation: 2,
+                              margin: EdgeInsets.only(bottom: 10),
+                              child: ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: _getStatusColor(
+                                      bookingData['status'] ?? 'pending'),
+                                  child: Icon(
+                                    _getStatusIcon(
+                                        bookingData['status'] ?? 'pending'),
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                                title: Text(
+                                  'การจองรหัส ${booking.id.substring(0, 8)}...',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'สถานะ: ${_getStatusText(bookingData['status'] ?? 'pending')}' +
+                                      '\nวันที่: ${bookingData['createdAt'] != null ? DateFormat('dd/MM/yyyy').format((bookingData['createdAt'] as Timestamp).toDate()) : 'ไม่ระบุ'}',
+                                ),
+                                trailing: Text(
+                                  '฿${bookingData['totalPrice'] ?? 0}',
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => BookingDetailPage(
+                                        bookingId: booking.id,
+                                      ),
+                                    ),
+                                  ).then((_) => _loadDashboardData());
+                                },
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStatCard(
+      String title, String value, IconData icon, Color color) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      elevation: 3,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 14,
+                  ),
+                ),
+                Icon(
+                  icon,
+                  color: color,
+                ),
+              ],
+            ),
+            SizedBox(height: 10),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'pending':
+        return Colors.amber;
+      case 'confirmed':
+        return Colors.blue;
+      case 'in_progress':
+        return Colors.indigo;
+      case 'completed':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'pending':
+        return Icons.pending_actions;
+      case 'confirmed':
+        return Icons.check_circle;
+      case 'in_progress':
+        return Icons.pets;
+      case 'completed':
+        return Icons.task_alt;
+      case 'cancelled':
+        return Icons.cancel;
+      default:
+        return Icons.help;
+    }
+  }
+
+  String _getStatusText(String status) {
+    switch (status) {
+      case 'pending':
+        return 'รอการยืนยัน';
+      case 'confirmed':
+        return 'ยืนยันแล้ว';
+      case 'in_progress':
+        return 'กำลังให้บริการ';
+      case 'completed':
+        return 'เสร็จสิ้น';
+      case 'cancelled':
+        return 'ยกเลิก';
+      default:
+        return 'ไม่ทราบสถานะ';
+    }
+  }
+}
