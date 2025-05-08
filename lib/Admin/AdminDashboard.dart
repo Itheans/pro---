@@ -8,6 +8,7 @@ import 'package:myproject/Admin/BookingManagementPage.dart';
 import 'package:myproject/Admin/BookingDetailPage.dart';
 import 'package:myproject/Admin/BookingManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
+import 'package:myproject/Admin/UserManagementPage.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -130,6 +131,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 IconButton(
                   icon: Icon(Icons.notifications),
                   onPressed: () {
+                    // แสดงการแจ้งเตือน
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -261,29 +263,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     crossAxisSpacing: 10,
                     childAspectRatio: 1.5,
                     children: [
-                      _buildStatCard(
-                        'ผู้ใช้ทั้งหมด',
-                        _totalUsers.toString(),
-                        Icons.people,
-                        Colors.blue,
+                      // การ์ดผู้ใช้ทั้งหมด
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => UserManagementPage()),
+                          ).then((_) => _loadDashboardData());
+                        },
+                        child: _buildStatCard(
+                          'ผู้ใช้ทั้งหมด',
+                          _totalUsers.toString(),
+                          Icons.people,
+                          Colors.blue,
+                        ),
                       ),
-                      _buildStatCard(
-                        'ผู้รับเลี้ยงแมว',
-                        _totalSitters.toString(),
-                        Icons.pets,
-                        Colors.deepOrange,
-                      ),
-                      _buildStatCard(
-                        'การจองทั้งหมด',
-                        _totalBookings.toString(),
-                        Icons.list_alt,
-                        Colors.purple,
-                      ),
-                      _buildStatCard(
-                        'รายได้ทั้งหมด',
-                        '${NumberFormat("#,##0.00").format(_totalRevenue)} บาท',
-                        Icons.monetization_on,
-                        Colors.green,
+
+                      // การ์ดผู้รับเลี้ยงแมว
+                      InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => SitterVerificationPage()),
+                          ).then((_) => _loadDashboardData());
+                        },
+                        child: _buildStatCard(
+                          'ผู้รับเลี้ยงแมว',
+                          _totalSitters.toString(),
+                          Icons.pets,
+                          Colors.deepOrange,
+                        ),
                       ),
                     ],
                   ),
@@ -395,6 +406,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ),
                       TextButton(
                         onPressed: () {
+                          // นำไปยังหน้าจัดการการจองทั้งหมด
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -466,6 +478,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                   ),
                                 ),
                                 onTap: () {
+                                  // นำไปยังหน้ารายละเอียดการจอง
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -580,3 +593,5 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 }
+//     }
+//   @override  

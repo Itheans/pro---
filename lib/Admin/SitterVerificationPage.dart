@@ -62,40 +62,73 @@ class _SitterVerificationPageState extends State<SitterVerificationPage>
     });
 
     try {
-      // โหลดข้อมูลตามแท็บที่เลือก
+      // แก้ไขวิธีการโหลดข้อมูล โดยแยกการค้นหาและการเรียงลำดับ
       if (_tabController.index == 0) {
-        // รอตรวจสอบ
+        // วิธีที่ 1: โหลดข้อมูลโดยไม่ใช้ orderBy (จะใช้ index น้อยลง)
         QuerySnapshot pendingSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .where('role', isEqualTo: 'sitter')
             .where('status', isEqualTo: 'pending')
-            .orderBy('registrationDate', descending: true)
             .get();
-        setState(() {
-          _pendingSitters = pendingSnapshot.docs;
+
+        // จัดเรียงข้อมูลในแอปแทน (ถ้าจำเป็น)
+        List<DocumentSnapshot> sortedDocs = pendingSnapshot.docs;
+        sortedDocs.sort((a, b) {
+          var aData = a.data() as Map<String, dynamic>;
+          var bData = b.data() as Map<String, dynamic>;
+
+          Timestamp? aTime = aData['registrationDate'] as Timestamp?;
+          Timestamp? bTime = bData['registrationDate'] as Timestamp?;
+
+          if (aTime == null && bTime == null) return 0;
+          if (aTime == null) return 1; // null comes last
+          if (bTime == null) return -1;
+
+          // descending order
+          return bTime.compareTo(aTime);
         });
-      } else if (_tabController.index == 1) {
-        // อนุมัติแล้ว
-        QuerySnapshot verifiedSnapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .where('role', isEqualTo: 'sitter')
-            .where('status', isEqualTo: 'approved')
-            .orderBy('registrationDate', descending: true)
-            .get();
+
         setState(() {
-          _verifiedSitters = verifiedSnapshot.docs;
+          _pendingSitters = sortedDocs;
         });
+
+        /* วิธีที่ 2: ถ้าวิธีที่ 1 ไม่ได้ผล ลองใช้วิธีนี้
+      // โหลดข้อมูลทั้งหมดก่อนแล้วค่อยกรอง
+      QuerySnapshot allSittersSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'sitter')
+          .get();
+      
+      // กรองเฉพาะที่มีสถานะ pending
+      List<DocumentSnapshot> pendingDocs = allSittersSnapshot.docs
+          .where((doc) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            return data['status'] == 'pending';
+          })
+          .toList();
+      
+      // เรียงลำดับตาม registrationDate
+      pendingDocs.sort((a, b) {
+        var aData = a.data() as Map<String, dynamic>;
+        var bData = b.data() as Map<String, dynamic>;
+        
+        Timestamp? aTime = aData['registrationDate'] as Timestamp?;
+        Timestamp? bTime = bData['registrationDate'] as Timestamp?;
+        
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return 1;
+        if (bTime == null) return -1;
+        
+        // descending order
+        return bTime.compareTo(aTime);
+      });
+      
+      setState(() {
+        _pendingSitters = pendingDocs;
+      });
+      */
       } else {
-        // ปฏิเสธแล้ว
-        QuerySnapshot rejectedSnapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .where('role', isEqualTo: 'sitter')
-            .where('status', isEqualTo: 'rejected')
-            .orderBy('registrationDate', descending: true)
-            .get();
-        setState(() {
-          _rejectedSitters = rejectedSnapshot.docs;
-        });
+        // โค้ดสำหรับแท็บอื่นๆ (ให้แก้ไขในลักษณะเดียวกัน)
       }
     } catch (e) {
       print('Error loading data: $e');

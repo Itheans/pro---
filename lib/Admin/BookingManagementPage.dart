@@ -466,26 +466,17 @@ class _BookingManagementPageState extends State<BookingManagementPage> {
     );
   }
 
+  // แก้ไขฟังก์ชัน _buildBookingsQuery() หรือฟังก์ชันที่เกี่ยวข้อง
   Stream<QuerySnapshot> _buildBookingsQuery() {
     Query query = FirebaseFirestore.instance.collection('bookings');
 
-    // กรองตามสถานะ
     if (_selectedStatus != 'all') {
       query = query.where('status', isEqualTo: _selectedStatus);
     }
 
-    // กรองตามช่วงเวลา
-    if (_startDate != null && _endDate != null) {
-      query = query.where(
-        'createdAt',
-        isGreaterThanOrEqualTo: Timestamp.fromDate(_startDate!),
-        isLessThanOrEqualTo:
-            Timestamp.fromDate(_endDate!.add(Duration(days: 1))),
-      );
-    }
+    query = query.orderBy('createdAt', descending: true);
 
-    // เรียงลำดับตามวันที่สร้าง (ล่าสุดก่อน)
-    return query.orderBy('createdAt', descending: true).snapshots();
+    return query.snapshots();
   }
 
   Widget _buildBookingDetailRow(String label, String value, IconData icon) {
