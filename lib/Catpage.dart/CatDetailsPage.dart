@@ -1,4 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:myproject/Catpage.dart/CatEdid.dart';
 import 'package:intl/intl.dart';
@@ -39,6 +41,130 @@ class _CatDetailsPageState extends State<CatDetailsPage> {
       months += 12;
     }
     return '$years ปี $months เดือน';
+  }
+
+  // เพิ่มฟังก์ชันแสดงกล่องยืนยันการลบ
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            'ลบข้อมูลแมว',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.red.shade700,
+            ),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RichText(
+                text: TextSpan(
+                  style: TextStyle(color: Colors.black87, fontSize: 16),
+                  children: [
+                    TextSpan(text: 'แน่ใจหรือไม่ว่าต้องการลบข้อมูลแมว '),
+                    TextSpan(
+                      text: currentCat.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange.shade700,
+                      ),
+                    ),
+                    TextSpan(text: ' ?'),
+                  ],
+                ),
+              ),
+              SizedBox(height: 12),
+              Text(
+                'การลบข้อมูลนี้จะไม่สามารถกู้คืนได้',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: Text(
+                'ยกเลิก',
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+            ElevatedButton.icon(
+              icon: Icon(Icons.delete_forever, color: Colors.white, size: 18),
+              label: Text(
+                'ลบข้อมูล',
+                style: TextStyle(color: Colors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteCat();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+// เพิ่มฟังก์ชันลบแมว
+  void _deleteCat() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // ลบรูปภาพจาก Storage (ถ้ามี)
+      if (currentCat.imagePath.isNotEmpty) {
+        try {
+          final ref = FirebaseStorage.instance.refFromURL(currentCat.imagePath);
+          await ref.delete();
+        } catch (e) {
+          print('Error deleting image: $e');
+        }
+      }
+
+      // ลบข้อมูลจาก Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('cats')
+          .doc(currentCat.id)
+          .delete();
+
+      // แสดงข้อความสำเร็จและกลับไปหน้าก่อนหน้า
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ลบข้อมูลแมว ${currentCat.name} สำเร็จ'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context);
+    } catch (e) {
+      // กรณีเกิดข้อผิดพลาด
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาดในการลบ: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
