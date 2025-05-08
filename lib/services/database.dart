@@ -49,13 +49,12 @@ class DatabaseMethods {
         .get();
   }
 
-  Future<QuerySnapshot> Search(String username) async {
-    // ปรับเป็นการค้นหาแบบไม่ต้องตรงทั้งหมด
+  Future<QuerySnapshot> Search(String searchField) async {
     return await FirebaseFirestore.instance
         .collection("users")
-        .orderBy("username")
-        .startAt([username.toLowerCase()]).endAt(
-            [username.toLowerCase() + '\uf8ff']).get();
+        .where('name', isGreaterThanOrEqualTo: searchField)
+        .where('name', isLessThanOrEqualTo: searchField + '\uf8ff')
+        .get();
   }
 
   Future<QuerySnapshot> SearchAlternative(String searchTerm) async {
@@ -63,6 +62,52 @@ class DatabaseMethods {
         .collection("users")
         .where("username", isGreaterThanOrEqualTo: searchTerm)
         .where("username", isLessThanOrEqualTo: searchTerm + '\uf8ff')
+        .get();
+  }
+
+  Future<QuerySnapshot> SearchByCaseInsensitive(String searchField) async {
+    // แปลงคำค้นหาเป็นตัวพิมพ์เล็กทั้งหมด
+    String searchLower = searchField.toLowerCase();
+
+    // คำค้นหาที่เป็นตัวพิมพ์ใหญ่
+    String searchUpper = searchField.toUpperCase();
+
+    // ค้นหาจากทั้งสามรูปแบบ (ตัวพิมพ์เล็ก, ตัวพิมพ์ใหญ่, หรือตรงตามที่พิมพ์)
+    QuerySnapshot lowerResults = await FirebaseFirestore.instance
+        .collection("users")
+        .where('name', isGreaterThanOrEqualTo: searchLower)
+        .where('name', isLessThanOrEqualTo: searchLower + '\uf8ff')
+        .get();
+
+    QuerySnapshot upperResults = await FirebaseFirestore.instance
+        .collection("users")
+        .where('name', isGreaterThanOrEqualTo: searchUpper)
+        .where('name', isLessThanOrEqualTo: searchUpper + '\uf8ff')
+        .get();
+
+    QuerySnapshot originalResults = await FirebaseFirestore.instance
+        .collection("users")
+        .where('name', isGreaterThanOrEqualTo: searchField)
+        .where('name', isLessThanOrEqualTo: searchField + '\uf8ff')
+        .get();
+
+    // รวมผลลัพธ์
+    List<DocumentSnapshot> combinedResults = [
+      ...lowerResults.docs,
+      ...upperResults.docs,
+      ...originalResults.docs,
+    ];
+
+    // กรองผลลัพธ์ที่ซ้ำกัน
+    final Map<String, DocumentSnapshot> uniqueResults = {};
+    for (var doc in combinedResults) {
+      uniqueResults[doc.id] = doc;
+    }
+
+    // สร้าง QuerySnapshot จากผลลัพธ์ที่ไม่ซ้ำกัน
+    return FirebaseFirestore.instance
+        .collection("users")
+        .where(FieldPath.documentId, whereIn: uniqueResults.keys.toList())
         .get();
   }
 
@@ -114,10 +159,30 @@ class DatabaseMethods {
   }
 
   Future<QuerySnapshot> getUserInfo(String username) async {
-    return await FirebaseFirestore.instance
+    // แก้ไขตรงนี้: เพิ่มวิธีค้นหาหลายรูปแบบ (case insensitive)
+    // ลองค้นหาทั้งในรูปแบบที่ส่งมา, รูปแบบตัวเล็กทั้งหมด และรูปแบบตัวใหญ่ทั้งหมด
+    QuerySnapshot snapshot = await FirebaseFirestore.instance
         .collection("users")
         .where("username", isEqualTo: username)
         .get();
+
+    // ถ้าไม่พบข้อมูล ลองค้นหาด้วยรูปแบบตัวพิมพ์เล็ก
+    if (snapshot.docs.isEmpty) {
+      snapshot = await FirebaseFirestore.instance
+          .collection("users")
+          .where("username", isEqualTo: username.toLowerCase())
+          .get();
+    }
+
+    // ถ้ายังไม่พบ ลองค้นหาด้วยรูปแบบตัวพิมพ์ใหญ่
+    if (snapshot.docs.isEmpty) {
+      snapshot = await FirebaseFirestore.instance
+          .collection("users")
+          .where("username", isEqualTo: username.toUpperCase())
+          .get();
+    }
+
+    return snapshot;
   }
 
   Future<Stream<QuerySnapshot>> getChatRooms(

@@ -127,23 +127,24 @@ class _MyWidgetState extends State<Chat> {
       return;
     }
 
-    // ลองทั้งแบบตัวพิมพ์ใหญ่ และตัวพิมพ์เล็ก
+    // แก้ไขตรงนี้: ปรับวิธีการค้นหาชื่อผู้ใช้
     DatabaseMethods().Search(value).then((QuerySnapshot docs) {
       if (docs.docs.isNotEmpty) {
         setState(() {
           queryResultSet = [];
           for (var doc in docs.docs) {
-            queryResultSet.add(doc.data() as Map<String, dynamic>);
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            // เพิ่มการตรวจสอบข้อมูล
+            if (data.containsKey('username') && data['username'] != null) {
+              queryResultSet.add(data);
+            }
           }
           tempSearchStore = List.from(queryResultSet);
           _isSearching = false;
         });
       } else {
-        // ลองดูว่าคอลเลกชันมีข้อมูลทั้งหมดกี่รายการ
-        FirebaseFirestore.instance.collection("users").get().then((allDocs) {
-          setState(() {
-            _isSearching = false;
-          });
+        setState(() {
+          _isSearching = false;
         });
       }
     }).catchError((error) {
@@ -467,17 +468,40 @@ class _ChatRoomListState extends State<ChatRoomListTile> {
     username =
         widget.chatRoomId.replaceAll("_", '').replaceAll(widget.myUsername, "");
 
-    QuerySnapshot querySnapshot =
-        await DatabaseMethods().getUserInfo(username.toUpperCase());
-    if (querySnapshot.docs.isNotEmpty) {
-      final userData = querySnapshot.docs[0].data() as Map<String, dynamic>;
-      setState(() {
-        name = userData['name'] ?? '';
-        profilePicUrl = userData['photo'] ?? '';
-        role = userData['role'] ?? '';
-        _isLoading = false;
-      });
-    } else {
+    try {
+      // แก้ไขตรงนี้: ใช้ toLowerCase() แทน toUpperCase() เพราะข้อมูลอาจเก็บในรูปแบบ lowercase
+      QuerySnapshot querySnapshot =
+          await DatabaseMethods().getUserInfo(username);
+
+      if (querySnapshot.docs.isNotEmpty) {
+        final userData = querySnapshot.docs[0].data() as Map<String, dynamic>;
+        setState(() {
+          name = userData['name'] ?? 'ไม่ระบุชื่อ';
+          profilePicUrl = userData['photo'] ?? '';
+          role = userData['role'] ?? '';
+          _isLoading = false;
+        });
+      } else {
+        // หากไม่พบข้อมูล ให้ลองค้นหาอีกครั้งด้วย uppercase
+        QuerySnapshot uppercaseQuery =
+            await DatabaseMethods().getUserInfo(username.toUpperCase());
+        if (uppercaseQuery.docs.isNotEmpty) {
+          final userData =
+              uppercaseQuery.docs[0].data() as Map<String, dynamic>;
+          setState(() {
+            name = userData['name'] ?? 'ไม่ระบุชื่อ';
+            profilePicUrl = userData['photo'] ?? '';
+            role = userData['role'] ?? '';
+            _isLoading = false;
+          });
+        } else {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      print("Error fetching user data: $e");
       setState(() {
         _isLoading = false;
       });
@@ -507,7 +531,7 @@ class _ChatRoomListState extends State<ChatRoomListTile> {
             context,
             MaterialPageRoute(
                 builder: (context) => ChatPage(
-                      name: name,
+                      name: name.isEmpty ? 'ไม่ระบุชื่อ' : name,
                       profileurl: profilePicUrl,
                       username: username,
                       role: role,
