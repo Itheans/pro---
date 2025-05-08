@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
-
+import 'package:myproject/utils/fix_database.dart';
+import 'package:myproject/utils/user_fix.dart';
 import 'package:myproject/Admin/AdminLoginPage.dart';
 import 'package:myproject/Catpage.dart/CatDetailsPage.dart';
 import 'package:myproject/Catpage.dart/CatRegistrationPage.dart';
@@ -19,11 +20,15 @@ import 'package:myproject/pages.dart/sigup.dart';
 import 'package:myproject/services/auth.dart';
 import 'package:myproject/utils/check_status_wrapper.dart'; // เพิ่ม import
 import 'package:myproject/widget/app_constant.dart';
+import 'package:myproject/utils/review_repair.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   Stripe.publishableKey = publishableKey;
+  await UserDataFix.fixReviewUserInfo();
+  await ReviewRepair.fixReviews();
+  await DatabaseFixer.fixAllReviews();
   runApp(const MyApp());
 }
 

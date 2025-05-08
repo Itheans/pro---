@@ -603,7 +603,10 @@ class _MyWidgetState extends State<Home> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => ReviewsPage(),
+                      builder: (context) => ReviewsPage(
+                        itemId: 'booking_id',
+                        sitterId: '/ sitters_id',
+                      ),
                     ),
                   );
                 } else {
@@ -624,7 +627,10 @@ class _MyWidgetState extends State<Home> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => ReviewsPage(),
+                    builder: (context) => ReviewsPage(
+                      itemId: 'booking_id',
+                      sitterId: '/ sitters_id',
+                    ),
                   ),
                 );
               }
