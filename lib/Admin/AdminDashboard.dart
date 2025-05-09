@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
+import 'package:myproject/Admin/BusinessReportPage.dart';
+import 'package:myproject/Admin/ComplaintsManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
 import 'package:myproject/Admin/BookingManagementPage.dart';
 import 'package:myproject/Admin/BookingDetailPage.dart';
@@ -415,6 +417,153 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ).then((_) => _loadDashboardData());
                         },
                         child: Text('ดูทั้งหมด'),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 20),
+                  // ส่วนเมนูการจัดการเพิ่มเติม
+                  Text(
+                    'การจัดการระบบ',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Column(
+                    children: [
+                      // รายงานธุรกิจ
+                      Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        elevation: 2,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => BusinessReportPage(),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(15),
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(
+                                    Icons.bar_chart,
+                                    color: Colors.blue,
+                                    size: 24,
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'รายงานธุรกิจ',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Text(
+                                        'ดูรายงานและสถิติต่างๆ ของระบบ',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.grey[400],
+                                  size: 16,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 10),
+
+                      // จัดการปัญหาและข้อร้องเรียน
+                      Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        elevation: 2,
+                        child: InkWell(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    ComplaintsManagementPage(),
+                              ),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(15),
+                          child: Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: EdgeInsets.all(12),
+                                  child: Icon(
+                                    Icons.report_problem,
+                                    color: Colors.red,
+                                    size: 24,
+                                  ),
+                                ),
+                                SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'จัดการปัญหาและข้อร้องเรียน',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Text(
+                                        'ตอบกลับปัญหาและข้อร้องเรียนจากผู้ใช้',
+                                        style: TextStyle(
+                                          color: Colors.grey[600],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.arrow_forward_ios,
+                                  color: Colors.grey[400],
+                                  size: 16,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
