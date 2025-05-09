@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
 import 'package:myproject/Admin/AdminSettingsPage.dart';
+import 'package:myproject/Admin/ServiceFeeManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
 import 'package:myproject/Admin/BookingManagementPage.dart';
 import 'package:myproject/Admin/BookingDetailPage.dart';
@@ -913,6 +914,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
               context,
               MaterialPageRoute(builder: (context) => SitterIncomeReport()),
             );
+          },
+        ),
+        // เพิ่มต่อจากเมนูที่มีอยู่เดิม
+        SizedBox(height: 8),
+        _buildManagementCard(
+          'จัดการค่าบริการ',
+          'กำหนดอัตราค่าบริการและค่าธรรมเนียมต่างๆ',
+          Icons.attach_money,
+          Colors.teal,
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) => ServiceFeeManagementPage()),
+            ).then((_) => _loadDashboardData());
           },
         ),
       ],

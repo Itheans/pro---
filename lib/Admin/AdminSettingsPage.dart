@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:myproject/Admin/BookingCleanupService.dart';
 import 'package:myproject/Admin/ScheduledTasksManager.dart';
+import 'package:myproject/Admin/ServiceFeeManagementPage.dart';
 
 class AdminSettingsPage extends StatefulWidget {
   const AdminSettingsPage({Key? key}) : super(key: key);
@@ -332,6 +333,65 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
 
                   SizedBox(height: 20),
 
+// เพิ่มส่วนการจัดการค่าบริการ
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.attach_money,
+                                  color: Colors.deepOrange),
+                              SizedBox(width: 8),
+                              Text(
+                                'การจัดการค่าบริการ',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'ปรับแต่งค่าบริการและค่าธรรมเนียมต่างๆ ของระบบ',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                              fontSize: 14,
+                            ),
+                          ),
+                          SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          ServiceFeeManagementPage()),
+                                );
+                              },
+                              icon: Icon(Icons.settings),
+                              label: Text('ไปยังหน้าจัดการค่าบริการ'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.teal,
+                                foregroundColor: Colors.white,
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                   // ปุ่มบันทึกการตั้งค่า
                   SizedBox(
                     width: double.infinity,
@@ -346,6 +406,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                       ),
                     ),
                   ),
+                  SizedBox(height: 20),
                 ],
               ),
             ),
