@@ -5,6 +5,8 @@ import 'package:myproject/Admin/NotificationService.dart';
 import 'package:myproject/Admin/SitterApprovalPage.dart';
 import 'package:myproject/pages.dart/login.dart';
 import 'package:intl/intl.dart';
+import 'package:myproject/Admin/BookingCleanupService.dart';
+import 'package:myproject/Admin/BatchBookingManagementPage.dart';
 
 class AdminPanel extends StatefulWidget {
   const AdminPanel({Key? key}) : super(key: key);
@@ -28,6 +30,42 @@ class _AdminPanelState extends State<AdminPanel> {
     super.initState();
     _loadAdminInfo();
     _loadDashboardData();
+  }
+
+  Future<void> _runBookingCleanup() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      BookingCleanupService cleanupService = BookingCleanupService();
+      await cleanupService.runCleanupTasks();
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ทำความสะอาดคิวการจองเรียบร้อยแล้ว'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // โหลดข้อมูลใหม่
+      _loadDashboardData();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      print('Error running booking cleanup: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาด: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // โหลดข้อมูลผู้ดูแลระบบ
@@ -177,6 +215,65 @@ class _AdminPanelState extends State<AdminPanel> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // เพิ่มปุ่มนี้ในส่วนของเมนูการจัดการระบบ
+                    Card(
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: InkWell(
+                        onTap: _runBookingCleanup,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: Colors.teal.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.cleaning_services,
+                                  color: Colors.teal.shade700,
+                                  size: 30,
+                                ),
+                              ),
+                              SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'ทำความสะอาดคิว',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'ลบคิวที่ไม่ได้รับการยืนยันเกิน 30 นาที',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: Colors.grey[400],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     // ส่วนข้อมูลผู้ดูแลระบบ
                     Card(
                       elevation: 4,
@@ -232,6 +329,73 @@ class _AdminPanelState extends State<AdminPanel> {
                       ),
                     ),
                     SizedBox(height: 20),
+
+// เพิ่มเมนูจัดการการจองแบบกลุ่ม
+                    Card(
+                      elevation: 3,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) =>
+                                    BatchBookingManagementPage()),
+                          ).then((_) => _loadDashboardData());
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade100,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.delete_sweep,
+                                  color: Colors.red.shade700,
+                                  size: 30,
+                                ),
+                              ),
+                              SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'ลบการจองแบบกลุ่ม',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'จัดการและลบการจองหลายรายการพร้อมกัน',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: Colors.grey[400],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
 
                     // สรุปข้อมูลทั่วไป
                     Text(

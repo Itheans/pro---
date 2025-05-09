@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
+import 'package:myproject/Admin/AdminSettingsPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
 import 'package:myproject/Admin/BookingManagementPage.dart';
 import 'package:myproject/Admin/BookingDetailPage.dart';
@@ -28,7 +29,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   double _totalRevenue = 0;
   List<DocumentSnapshot> _recentBookings = [];
   int _pendingNotifications = 0;
-
+  // ข้อมูลเพิ่มเติมสำหรับแสดงในหน้า Dashboard
+  double _thisWeekRevenue = 0;
+  double _lastWeekRevenue = 0;
+  int _thisWeekBookings = 0;
+  int _lastWeekBookings = 0;
   @override
   void initState() {
     super.initState();
@@ -115,6 +120,128 @@ class _AdminDashboardState extends State<AdminDashboard> {
         SnackBar(content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล: $e')),
       );
     }
+    // คำนวณรายได้และจำนวนการจองในสัปดาห์นี้และสัปดาห์ที่แล้ว
+    DateTime now = DateTime.now();
+    DateTime startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    DateTime startOfLastWeek = startOfWeek.subtract(Duration(days: 7));
+    DateTime endOfLastWeek = startOfWeek.subtract(Duration(days: 1));
+
+    Timestamp startOfWeekTimestamp = Timestamp.fromDate(startOfWeek);
+    Timestamp startOfLastWeekTimestamp = Timestamp.fromDate(startOfLastWeek);
+    Timestamp endOfLastWeekTimestamp = Timestamp.fromDate(endOfLastWeek);
+
+// จำนวนการจองในสัปดาห์นี้
+    final thisWeekBookingsSnapshot = await FirebaseFirestore.instance
+        .collection('bookings')
+        .where('createdAt', isGreaterThanOrEqualTo: startOfWeekTimestamp)
+        .get();
+
+// จำนวนการจองในสัปดาห์ที่แล้ว
+    final lastWeekBookingsSnapshot = await FirebaseFirestore.instance
+        .collection('bookings')
+        .where('createdAt', isGreaterThanOrEqualTo: startOfLastWeekTimestamp)
+        .where('createdAt', isLessThan: startOfWeekTimestamp)
+        .get();
+
+// คำนวณรายได้
+    double thisWeekRev = 0;
+    double lastWeekRev = 0;
+
+    for (var doc in thisWeekBookingsSnapshot.docs) {
+      Map<String, dynamic> data = doc.data();
+      if (data.containsKey('totalPrice')) {
+        thisWeekRev += (data['totalPrice'] is int)
+            ? (data['totalPrice'] as int).toDouble()
+            : (data['totalPrice'] as double);
+      }
+    }
+
+    for (var doc in lastWeekBookingsSnapshot.docs) {
+      Map<String, dynamic> data = doc.data();
+      if (data.containsKey('totalPrice')) {
+        lastWeekRev += (data['totalPrice'] is int)
+            ? (data['totalPrice'] as int).toDouble()
+            : (data['totalPrice'] as double);
+      }
+    }
+
+    setState(() {
+      _thisWeekBookings = thisWeekBookingsSnapshot.docs.length;
+      _lastWeekBookings = lastWeekBookingsSnapshot.docs.length;
+      _thisWeekRevenue = thisWeekRev;
+      _lastWeekRevenue = lastWeekRev;
+    });
+  }
+
+  Widget _buildComparisonCard(String title, String value, String change,
+      Color changeColor, IconData icon) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 14,
+                  ),
+                ),
+                Icon(
+                  icon,
+                  color: Colors.deepOrange,
+                  size: 20,
+                ),
+              ],
+            ),
+            SizedBox(height: 10),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 5),
+            Row(
+              children: [
+                Icon(
+                  change.contains('-')
+                      ? Icons.arrow_downward
+                      : Icons.arrow_upward,
+                  color: changeColor,
+                  size: 14,
+                ),
+                SizedBox(width: 4),
+                Text(
+                  change,
+                  style: TextStyle(
+                    color: changeColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  ' vs สัปดาห์ที่แล้ว',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -392,7 +519,71 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                     SizedBox(height: 20),
                   ],
-
+// เพิ่มเมนูตั้งค่าระบบ
+                  Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => AdminSettingsPage()),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.settings,
+                                color: Colors.grey.shade700,
+                                size: 30,
+                              ),
+                            ),
+                            SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'ตั้งค่าระบบ',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'ตั้งค่าการทำงานอัตโนมัติและการจัดการข้อมูล',
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Icon(
+                              Icons.arrow_forward_ios,
+                              size: 16,
+                              color: Colors.grey[400],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                   // รายการจองล่าสุด
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
