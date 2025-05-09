@@ -211,7 +211,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       return current > 0 ? "+100%" : "0%";
     }
     double percentChange = ((current - previous) / previous) * 100;
-    return '${percentChange >= 0 ? "+" : ""}${percentChange.toStringAsFixed(1)}%';
+    return '${percentChange >= 0 ? "+" : ""}${percentChange.toStringAsFixed(0)}%';
   }
 
   // ฟังก์ชันออกจากระบบ
@@ -390,8 +390,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     _buildManagementSection(),
                     SizedBox(height: 24),
 
-                    // แสดงรายการจองล่าสุด
+                    // แสดงรายการจองล่าสุด (เรียกใช้เพียงครั้งเดียว)
                     _buildRecentBookingsSection(),
+
+                    // เพิ่ม padding ด้านล่างเพื่อป้องกัน overflow
+                    SizedBox(height: 80),
                   ],
                 ),
               ),
@@ -594,45 +597,98 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         SizedBox(height: 12),
-        GridView.count(
-          shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          childAspectRatio: 1.5,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+        Container(
+          width: double.infinity,
+          child: GridView.count(
+            shrinkWrap: true,
+            physics: NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            childAspectRatio: 1.5,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            children: [
+              _buildSimpleStatCard(
+                'ผู้ใช้ทั้งหมด',
+                _totalUsers.toString(),
+                Icons.people,
+                Colors.blue,
+              ),
+              _buildSimpleStatCard(
+                'พี่เลี้ยงแมว',
+                _totalSitters.toString(),
+                Icons.pets,
+                Colors.deepOrange,
+              ),
+              _buildSimpleStatCard(
+                'การจองทั้งหมด',
+                _totalBookings.toString(),
+                Icons.calendar_month,
+                Colors.purple,
+              ),
+              _buildSimpleStatCard(
+                'รายได้ทั้งหมด',
+                '฿${NumberFormat('#,##0').format(_totalRevenue)}',
+                Icons.monetization_on,
+                Colors.green,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+// เพิ่ม method ใหม่สำหรับแสดงการ์ดสถิติแบบง่าย
+  Widget _buildSimpleStatCard(
+      String title, String value, IconData icon, Color color) {
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      elevation: 2,
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _buildStatCard(
-              'ผู้ใช้ทั้งหมด',
-              _totalUsers.toString(),
-              Icons.people,
-              Colors.blue,
-              UserManagementPage(),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 14,
+                  ),
+                ),
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: color,
+                    size: 20,
+                  ),
+                ),
+              ],
             ),
-            _buildStatCard(
-              'พี่เลี้ยงแมว',
-              _totalSitters.toString(),
-              Icons.pets,
-              Colors.deepOrange,
-              SitterVerificationPage(),
-            ),
-            _buildStatCard(
-              'การจองทั้งหมด',
-              _totalBookings.toString(),
-              Icons.calendar_month,
-              Colors.purple,
-              BookingManagementPage(),
-            ),
-            _buildStatCard(
-              'รายได้ทั้งหมด',
-              '฿${NumberFormat('#,##0').format(_totalRevenue)}',
-              Icons.monetization_on,
-              Colors.green,
-              SitterIncomeReport(),
+            Spacer(),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 
@@ -662,25 +718,114 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
         ),
         SizedBox(height: 12),
+        // แก้ไขให้เป็น Row ที่มี Card 2 อันตรงๆ ไม่มีข้อความด้านข้าง
         Row(
           children: [
+            // การ์ดแสดงจำนวนการจอง
             Expanded(
-              child: _buildComparisonCard(
-                'การจอง (สัปดาห์นี้)',
-                '$_thisWeekBookings รายการ',
-                bookingChangePercent,
-                bookingChangeColor,
-                Icons.calendar_today,
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'การจอง (สัปดาห์นี้)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        '${_thisWeekBookings} รายการ',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            bookingChangePercent.startsWith('+')
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            color: bookingChangeColor,
+                            size: 14,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            bookingChangePercent,
+                            style: TextStyle(
+                              color: bookingChangeColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
             SizedBox(width: 12),
+            // การ์ดแสดงรายได้
             Expanded(
-              child: _buildComparisonCard(
-                'รายได้ (สัปดาห์นี้)',
-                '฿${NumberFormat('#,##0').format(_thisWeekRevenue)}',
-                revenueChangePercent,
-                revenueChangeColor,
-                Icons.monetization_on,
+              child: Card(
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'รายได้ (สัปดาห์นี้)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        '฿${NumberFormat('#,##0').format(_thisWeekRevenue)}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Icon(
+                            revenueChangePercent.startsWith('+')
+                                ? Icons.arrow_upward
+                                : Icons.arrow_downward,
+                            color: revenueChangeColor,
+                            size: 14,
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            revenueChangePercent,
+                            style: TextStyle(
+                              color: revenueChangeColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -1094,21 +1239,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    'ดูข้อมูลเพิ่มเติม',
-                    style: TextStyle(
-                      color: color.withOpacity(0.8),
-                      fontSize: 12,
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward,
-                    color: color.withOpacity(0.8),
-                    size: 12,
-                  ),
-                ],
+              // แก้ไขส่วนนี้โดยลบข้อความแสดงดูข้อมูลเพิ่มเติมออก
+              // เนื่องจากที่ทำให้เกิดข้อความ BOTTOM OVERLAYED คือมีข้อความล้นออกมา
+              Container(
+                height: 8, // ใส่ container เปล่าแทนเพื่อให้มีระยะห่างด้านล่าง
               ),
             ],
           ),
