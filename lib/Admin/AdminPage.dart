@@ -1189,3 +1189,33 @@ class _AdminPanelState extends State<AdminPanel> {
     }
   }
 }
+
+class BookingCleanupService {
+  Future<void> runCleanupTasks() async {
+    try {
+      // Clean up expired bookings
+      await _cleanExpiredBookings();
+
+      // Clean up abandoned bookings (e.g., unpaid after X hours)
+      await _cleanAbandonedBookings();
+
+      // Update booking statuses
+      await _updateBookingStatuses();
+    } catch (e) {
+      print('Error during cleanup: $e');
+      throw e;
+    }
+  }
+
+  Future<void> _cleanExpiredBookings() async {
+    // TODO: Implement expired bookings cleanup logic
+  }
+
+  Future<void> _cleanAbandonedBookings() async {
+    // TODO: Implement abandoned bookings cleanup logic
+  }
+
+  Future<void> _updateBookingStatuses() async {
+    // TODO: Implement status update logic
+  }
+}

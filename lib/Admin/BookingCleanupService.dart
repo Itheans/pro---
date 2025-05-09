@@ -10,7 +10,8 @@ class BookingCleanupService {
   Future<void> cleanupPendingBookings({int timeoutMinutes = 30}) async {
     try {
       // คำนวณเวลาที่เกินกำหนด
-      DateTime timeoutThreshold = DateTime.now().subtract(Duration(minutes: timeoutMinutes));
+      DateTime timeoutThreshold =
+          DateTime.now().subtract(Duration(minutes: timeoutMinutes));
       Timestamp timestampThreshold = Timestamp.fromDate(timeoutThreshold);
 
       // ค้นหาการจองที่มีสถานะ pending และสร้างมานานเกินกว่าเวลาที่กำหนด
@@ -28,14 +29,12 @@ class BookingCleanupService {
         String bookingId = doc.id;
 
         // อัพเดทสถานะเป็นยกเลิก
-        await _firestore
-            .collection('bookings')
-            .doc(bookingId)
-            .update({
-              'status': 'cancelled',
-              'updatedAt': FieldValue.serverTimestamp(),
-              'cancellationReason': 'ระบบยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
-            });
+        await _firestore.collection('bookings').doc(bookingId).update({
+          'status': 'cancelled',
+          'updatedAt': FieldValue.serverTimestamp(),
+          'cancellationReason':
+              'ระบบยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
+        });
 
         // ส่งการแจ้งเตือนไปยังผู้ใช้
         if (bookingData.containsKey('userId')) {
@@ -43,7 +42,8 @@ class BookingCleanupService {
             userId: bookingData['userId'],
             bookingId: bookingId,
             status: 'auto_cancelled',
-            message: 'การจองของคุณถูกยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
+            message:
+                'การจองของคุณถูกยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
           );
         }
 
@@ -53,7 +53,8 @@ class BookingCleanupService {
             userId: bookingData['sitterId'],
             bookingId: bookingId,
             status: 'auto_cancelled',
-            message: 'การจองถูกยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
+            message:
+                'การจองถูกยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
           );
         }
 
@@ -83,10 +84,7 @@ class BookingCleanupService {
       // ลบการจองเก่า
       for (var doc in oldBookings.docs) {
         String bookingId = doc.id;
-        await _firestore
-            .collection('bookings')
-            .doc(bookingId)
-            .delete();
+        await _firestore.collection('bookings').doc(bookingId).delete();
 
         print('Deleted old booking: $bookingId');
       }

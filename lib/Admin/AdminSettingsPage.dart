@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:myproject/Admin/BookingCleanupService.dart';
 import 'package:myproject/Admin/ScheduledTasksManager.dart';
-import 'package:myproject/Admin/AdminSettingsPage.dart';
 
 class AdminSettingsPage extends StatefulWidget {
   const AdminSettingsPage({Key? key}) : super(key: key);
