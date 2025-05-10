@@ -1,6 +1,8 @@
 {
+  
     "indexes": [
       {
+        
         "collectionGroup": "users",
         "queryScope": "COLLECTION",
         "fields": [

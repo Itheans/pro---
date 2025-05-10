@@ -592,6 +592,9 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
         return;
       }
 
+      // เพิ่มเวลาหมดอายุ 15 นาที
+      final DateTime expirationTime = DateTime.now().add(Duration(minutes: 15));
+
       // Create a booking request document in Firestore
       final bookingRequest = {
         'userId': user.uid,
@@ -600,6 +603,8 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
             widget.targetDates.map((date) => Timestamp.fromDate(date)).toList(),
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
+        'expirationTime':
+            Timestamp.fromDate(expirationTime), // เพิ่มเวลาหมดอายุ
         'sitterId': availableSitters.first['id'], // เลือกผู้รับเลี้ยงคนแรกที่พบ
       };
 
@@ -611,7 +616,8 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       // แจ้งเตือนผู้ใช้ว่าบันทึกข้อมูลแล้ว
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('บันทึกข้อมูลการจองสำเร็จ กำลังค้นหาผู้รับเลี้ยง')),
+            content:
+                Text('บันทึกข้อมูลการจองสำเร็จ คำขอนี้จะหมดอายุใน 15 นาที')),
       );
 
       // เลือกผู้รับเลี้ยงจาก availableSitters ที่ได้ค้นหาไว้แล้ว
