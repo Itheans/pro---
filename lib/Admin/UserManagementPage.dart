@@ -38,6 +38,117 @@ class _UserManagementPageState extends State<UserManagementPage>
     _loadAllUsers();
   }
 
+  Future<void> _deleteUser(String userId) async {
+    try {
+      // แสดงหน้าต่างยืนยันการลบ
+      bool confirmDelete = await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('ยืนยันการลบผู้ใช้'),
+          content: Text(
+              'คุณต้องการลบผู้ใช้นี้หรือไม่? การดำเนินการนี้ไม่สามารถยกเลิกได้'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: Text('ลบผู้ใช้'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmDelete != true) return;
+
+      // เริ่มการลบ
+      setState(() {
+        _isLoading = true;
+      });
+
+      // 1. ลบการจองทั้งหมดของผู้ใช้
+      final bookingsSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('userId', isEqualTo: userId)
+          .get();
+
+      for (var doc in bookingsSnapshot.docs) {
+        await FirebaseFirestore.instance
+            .collection('bookings')
+            .doc(doc.id)
+            .delete();
+      }
+
+      // 2. ลบแมวทั้งหมดของผู้ใช้
+      final catsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('cats')
+          .get();
+
+      for (var doc in catsSnapshot.docs) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('cats')
+            .doc(doc.id)
+            .delete();
+      }
+
+      // 3. ลบการแจ้งเตือนทั้งหมดของผู้ใช้
+      final notificationsSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .get();
+
+      for (var doc in notificationsSnapshot.docs) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .doc(doc.id)
+            .delete();
+      }
+
+      // 4. ลบข้อมูลผู้ใช้
+      await FirebaseFirestore.instance.collection('users').doc(userId).delete();
+
+      // 5. ลบบัญชีผู้ใช้จาก Authentication (ต้องใช้ Admin SDK หรือ Cloud Functions)
+      // สำหรับการลบผู้ใช้จาก Authentication จำเป็นต้องใช้ Firebase Admin SDK
+      // ซึ่งต้องทำผ่าน Cloud Functions หรือ Backend
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ลบผู้ใช้เรียบร้อยแล้ว'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // โหลดข้อมูลใหม่
+      _loadAllUsers();
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      print('Error deleting user: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาดในการลบผู้ใช้: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _loadAllUsers() async {
     setState(() {
       _isLoading = true;
@@ -478,10 +589,22 @@ class _UserManagementPageState extends State<UserManagementPage>
           ],
         ),
       ),
+      // ตำแหน่งที่ต้องแก้ไข: ในฟังก์ชัน _buildUserDetailDialog ส่วน actions:
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('ปิด'),
+        ),
+        // เพิ่มปุ่มลบผู้ใช้
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _deleteUser(userId);
+          },
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.red,
+          ),
+          child: const Text('ลบผู้ใช้'),
         ),
       ],
     );

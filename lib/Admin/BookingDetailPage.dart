@@ -29,6 +29,81 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
     _loadBookingData();
   }
 
+  Future<void> _deleteBooking() async {
+    try {
+      bool confirmDelete = await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('ยืนยันการลบการจอง'),
+          content: Text(
+              'คุณต้องการลบการจองนี้หรือไม่? การดำเนินการนี้ไม่สามารถยกเลิกได้'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text('ยกเลิก'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: Text('ลบการจอง'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmDelete != true) return;
+
+      setState(() => _isLoading = true);
+
+      // ลบการจอง
+      await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .delete();
+
+      // ส่งการแจ้งเตือนไปยังผู้ใช้
+      if (_bookingData != null && _bookingData!['userId'] != null) {
+        await _notificationService.sendBookingStatusNotification(
+          userId: _bookingData!['userId'],
+          bookingId: widget.bookingId,
+          status: 'deleted',
+          message: 'การจองของคุณถูกลบโดยผู้ดูแลระบบ',
+        );
+      }
+
+      // ส่งการแจ้งเตือนไปยังพี่เลี้ยง
+      if (_bookingData != null && _bookingData!['sitterId'] != null) {
+        await _notificationService.sendBookingStatusNotification(
+          userId: _bookingData!['sitterId'],
+          bookingId: widget.bookingId,
+          status: 'deleted',
+          message: 'การจองที่คุณรับได้ถูกลบโดยผู้ดูแลระบบ',
+        );
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ลบการจองเรียบร้อยแล้ว'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // กลับไปหน้าก่อนหน้า
+      Navigator.pop(context);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      print('Error deleting booking: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาดในการลบการจอง: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _loadBookingData() async {
     try {
       setState(() => _isLoading = true);
@@ -827,27 +902,33 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: nextStatuses.map((statusItem) {
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ElevatedButton.icon(
-                      onPressed: () => _showMessageDialog(statusItem['value']),
-                      icon: Icon(_getIconForStatus(statusItem['value'])),
-                      label: Text(statusItem['label']),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: statusItem['color'],
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
+            // เพิ่มปุ่มลบการจอง
+            Divider(height: 32),
+            InkWell(
+              onTap: _deleteBooking,
+              borderRadius: BorderRadius.circular(8),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.delete, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text(
+                      'ลบการจอง',
+                      style: TextStyle(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  ),
-                );
-              }).toList(),
+                  ],
+                ),
+              ),
             ),
           ],
         ),

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:myproject/Admin/ScheduledTasksManager.dart';
 import 'package:myproject/utils/fix_database.dart';
 import 'package:myproject/utils/user_fix.dart';
 import 'package:myproject/Admin/AdminLoginPage.dart';
@@ -255,15 +256,14 @@ class MyApp extends StatelessWidget {
     }
   }
 
-// เรียกใช้ในฟังก์ชัน main()
+// เพิ่มในส่วนของฟังก์ชัน main หลังจากที่ initialize Firebase เรียบร้อยแล้ว
   void main() async {
     WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp();
-    Stripe.publishableKey = publishableKey;
 
-    // เพิ่มการซ่อมแซมฐานข้อมูล
-    await _fixCorruptedSitterIds();
+    // เริ่มระบบทำความสะอาดคิวอัตโนมัติ
+    ScheduledTasksManager().startScheduledTasks();
 
-    runApp(const MyApp());
+    runApp(MyApp());
   }
 }

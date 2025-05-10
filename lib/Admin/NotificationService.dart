@@ -99,6 +99,10 @@ class NotificationService {
         return 'การบริการเสร็จสิ้น';
       case 'cancelled':
         return 'การจองถูกยกเลิก';
+      case 'auto_cancelled':
+        return 'การจองถูกยกเลิกอัตโนมัติ';
+      case 'deleted':
+        return 'การจองถูกลบโดยแอดมิน';
       case 'approval':
         return 'คำขอเป็นพี่เลี้ยงได้รับการอนุมัติ';
       case 'rejection':
