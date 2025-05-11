@@ -313,6 +313,8 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
         return 'เสร็จสิ้น';
       case 'cancelled':
         return 'ยกเลิก';
+      case 'expired': // เพิ่มสถานะใหม่
+        return 'หมดเวลา';
       default:
         return 'ไม่ทราบสถานะ';
     }
@@ -321,7 +323,7 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'pending':
-        return Colors.orange;
+        return Colors.amber;
       case 'confirmed':
         return Colors.green;
       case 'in_progress':
@@ -330,6 +332,8 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
         return Colors.purple;
       case 'cancelled':
         return Colors.red;
+      case 'expired': // เพิ่มสถานะใหม่
+        return Colors.grey; // หรือสีที่คุณต้องการ
       default:
         return Colors.grey;
     }

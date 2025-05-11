@@ -266,6 +266,8 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
         return Icons.calendar_today;
       case 'report':
         return Icons.report_problem;
+      case 'booking_expired': // เพิ่มประเภทใหม่
+        return Icons.timer_off; // ใช้ไอคอนนาฬิกาที่มีเครื่องหมายปิด
       default:
         return Icons.notifications;
     }
@@ -279,6 +281,8 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
         return 'มีการจองใหม่';
       case 'report':
         return 'มีรายงานปัญหาใหม่';
+      case 'booking_expired': // เพิ่มประเภทใหม่
+        return 'คำขอการจองหมดเวลา';
       default:
         return 'การแจ้งเตือนใหม่';
     }

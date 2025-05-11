@@ -595,7 +595,7 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       // เพิ่มเวลาหมดอายุ 15 นาที
       final DateTime expirationTime = DateTime.now().add(Duration(minutes: 15));
 
-      // Create a booking request document in Firestore
+// ปรับปรุง object bookingRequest ให้มีเวลาหมดอายุ
       final bookingRequest = {
         'userId': user.uid,
         'catIds': catIds,
@@ -603,8 +603,7 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
             widget.targetDates.map((date) => Timestamp.fromDate(date)).toList(),
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
-        'expirationTime':
-            Timestamp.fromDate(expirationTime), // เพิ่มเวลาหมดอายุ
+        'expirationTime': Timestamp.fromDate(expirationTime), // เพิ่มบรรทัดนี้
         'sitterId': availableSitters.first['id'], // เลือกผู้รับเลี้ยงคนแรกที่พบ
       };
 
