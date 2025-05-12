@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
 import 'package:myproject/Admin/AdminSettingsPage.dart';
+import 'package:myproject/Admin/ScheduledTasksManager.dart';
 import 'package:myproject/Admin/ServiceFeeManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
 import 'package:myproject/Admin/BookingManagementPage.dart';
@@ -42,11 +43,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _adminPhoto = "";
   int _expiredBookingsCount = 0;
 
+// แก้ไขฟังก์ชัน initState ในคลาส _AdminDashboardState
   @override
   void initState() {
     super.initState();
     _loadAdminInfo();
     _loadDashboardData();
+
+    // เพิ่มบรรทัดนี้เพื่อเริ่มต้น scheduled tasks
+    ScheduledTasksManager().startScheduledTasks();
+  }
+
+// เพิ่มการหยุด scheduled tasks เมื่อออกจากหน้าจอ
+  @override
+  void dispose() {
+    ScheduledTasksManager().stopScheduledTasks();
+    super.dispose();
   }
 
   Future<void> _loadAdminInfo() async {

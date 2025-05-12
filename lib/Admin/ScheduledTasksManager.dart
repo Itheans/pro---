@@ -14,13 +14,13 @@ class ScheduledTasksManager {
 
   ScheduledTasksManager._internal();
 
-  // เริ่มการทำงานตามกำหนดการ
+  // แก้ไขเวลาในฟังก์ชัน startScheduledTasks
   void startScheduledTasks() {
     // หยุดตัวจับเวลาเดิมก่อน (ถ้ามี)
     stopScheduledTasks();
 
-    // ตั้งเวลาให้ระบบทำความสะอาดคิวทำงานทุก 30 นาที
-    _bookingCleanupTimer = Timer.periodic(Duration(minutes: 30), (timer) {
+    // เปลี่ยนจาก 30 นาทีเป็น 5 นาที
+    _bookingCleanupTimer = Timer.periodic(Duration(minutes: 5), (timer) {
       _cleanupService.runCleanupTasks();
     });
 
