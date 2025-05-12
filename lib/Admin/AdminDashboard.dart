@@ -40,6 +40,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _adminName = "แอดมิน";
   String _adminEmail = "";
   String _adminPhoto = "";
+  int _expiredBookingsCount = 0;
 
   @override
   void initState() {
@@ -120,6 +121,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .where('isRead', isEqualTo: false)
           .get();
 
+      final expiredBookingsNotificationsSnapshot = await FirebaseFirestore
+          .instance
+          .collection('admin_notifications')
+          .where('type', isEqualTo: 'booking_expired')
+          .where('isRead', isEqualTo: false)
+          .get();
+
       // คำนวณรายได้ทั้งหมด
       double totalRevenue = 0;
       for (var doc in completedBookingsSnapshot.docs) {
@@ -141,6 +149,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         _totalRevenue = totalRevenue;
         _recentBookings = bookingsSnapshot.docs;
         _pendingNotifications = notificationsSnapshot.docs.length;
+        _expiredBookingsCount =
+            expiredBookingsNotificationsSnapshot.docs.length;
       });
 
       // คำนวณรายได้และจำนวนการจองในสัปดาห์นี้และสัปดาห์ที่แล้ว
@@ -393,6 +403,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
                     // แสดงรายการจองล่าสุด (เรียกใช้เพียงครั้งเดียว)
                     _buildRecentBookingsSection(),
+                    SizedBox(height: 24),
 
                     // เพิ่ม padding ด้านล่างเพื่อป้องกัน overflow
                     SizedBox(height: 80),
@@ -930,6 +941,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   builder: (context) => ServiceFeeManagementPage()),
             ).then((_) => _loadDashboardData());
           },
+        ),
+        SizedBox(height: 8),
+        _buildManagementCard(
+          'คำขอที่หมดเวลา',
+          'ตรวจสอบคำขอการจองที่หมดเวลาและถูกยกเลิกอัตโนมัติ',
+          Icons.timer_off,
+          Colors.grey,
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AdminNotificationsPage()),
+            ).then((_) => _loadDashboardData());
+          },
+          badgeCount: _expiredBookingsCount,
         ),
       ],
     );
