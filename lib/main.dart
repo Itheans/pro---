@@ -30,6 +30,7 @@ void main() async {
   await UserDataFix.fixReviewUserInfo();
   await ReviewRepair.fixReviews();
   await DatabaseFixer.fixAllReviews();
+  ScheduledTasksManager().startScheduledTasks();
   runApp(const MyApp());
 }
 

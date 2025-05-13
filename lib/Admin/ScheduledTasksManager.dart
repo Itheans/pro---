@@ -14,27 +14,24 @@ class ScheduledTasksManager {
 
   ScheduledTasksManager._internal();
 
-  // แก้ไขเวลาในฟังก์ชัน startScheduledTasks
   void startScheduledTasks() {
     // หยุดตัวจับเวลาเดิมก่อน (ถ้ามี)
     stopScheduledTasks();
 
-    // เปลี่ยนจาก 30 นาทีเป็น 5 นาที
-    _bookingCleanupTimer = Timer.periodic(Duration(minutes: 5), (timer) {
+    // ตั้งเวลาให้ทำงานทุก 1 นาที เพื่อตรวจสอบบ่อยขึ้น
+    _bookingCleanupTimer = Timer.periodic(Duration(minutes: 1), (timer) {
       _cleanupService.runCleanupTasks();
     });
 
-    print('Scheduled tasks started');
+    print('Scheduled tasks started with 1 minute interval');
   }
 
-  // หยุดการทำงานตามกำหนดการ
   void stopScheduledTasks() {
     _bookingCleanupTimer?.cancel();
     _bookingCleanupTimer = null;
     print('Scheduled tasks stopped');
   }
 
-  // สั่งให้ทำงานทันที
   Future<void> runTasksNow() async {
     await _cleanupService.runCleanupTasks();
     print('Tasks run manually');

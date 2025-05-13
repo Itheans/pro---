@@ -1,186 +1,115 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/material.dart';
-import 'package:myproject/Admin/NotificationService.dart';
 
 class BookingCleanupService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final NotificationService _notificationService = NotificationService();
 
-  // ตรวจสอบและลบคิวการจองที่ไม่ได้รับการยืนยันเกินเวลาที่กำหนด
-  Future<void> cleanupPendingBookings({int timeoutMinutes = 30}) async {
+  Future<void> runCleanupTasks() async {
     try {
-      // คำนวณเวลาที่เกินกำหนด
-      DateTime timeoutThreshold =
-          DateTime.now().subtract(Duration(minutes: timeoutMinutes));
-      Timestamp timestampThreshold = Timestamp.fromDate(timeoutThreshold);
-
-      // ค้นหาการจองที่มีสถานะ pending และสร้างมานานเกินกว่าเวลาที่กำหนด
-      QuerySnapshot pendingBookings = await _firestore
-          .collection('bookings')
-          .where('status', isEqualTo: 'pending')
-          .where('createdAt', isLessThan: timestampThreshold)
-          .get();
-
-      print('Found ${pendingBookings.docs.length} expired pending bookings');
-
-      // ลบการจองที่เกินเวลาและส่งการแจ้งเตือน
-      for (var doc in pendingBookings.docs) {
-        Map<String, dynamic> bookingData = doc.data() as Map<String, dynamic>;
-        String bookingId = doc.id;
-
-        // อัพเดทสถานะเป็นยกเลิก
-        await _firestore.collection('bookings').doc(bookingId).update({
-          'status': 'cancelled',
-          'updatedAt': FieldValue.serverTimestamp(),
-          'cancellationReason':
-              'ระบบยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
-        });
-
-        // ส่งการแจ้งเตือนไปยังผู้ใช้
-        if (bookingData.containsKey('userId')) {
-          await _notificationService.sendBookingStatusNotification(
-            userId: bookingData['userId'],
-            bookingId: bookingId,
-            status: 'auto_cancelled',
-            message:
-                'การจองของคุณถูกยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
-          );
-        }
-
-        // ส่งการแจ้งเตือนไปยังพี่เลี้ยง
-        if (bookingData.containsKey('sitterId')) {
-          await _notificationService.sendBookingStatusNotification(
-            userId: bookingData['sitterId'],
-            bookingId: bookingId,
-            status: 'auto_cancelled',
-            message:
-                'การจองถูกยกเลิกอัตโนมัติเนื่องจากไม่ได้รับการยืนยันภายใน $timeoutMinutes นาที',
-          );
-        }
-
-        print('Auto-cancelled booking: $bookingId');
-      }
+      print('Running booking cleanup tasks...');
+      await _checkExpiredBookings();
     } catch (e) {
-      print('Error cleaning up bookings: $e');
+      print('Error in booking cleanup: $e');
     }
   }
 
-// เพิ่มฟังก์ชันใหม่หลังจากฟังก์ชัน cleanupOldBookings
-  Future<void> cleanupExpiredBookings() async {
+  Future<void> _checkExpiredBookings() async {
     try {
-      // คำนวณเวลาปัจจุบัน
-      DateTime now = DateTime.now();
-      Timestamp nowTimestamp = Timestamp.fromDate(now);
+      // ดึงเวลาปัจจุบัน
+      final now = DateTime.now();
+      print('Checking expired bookings at: ${now.toString()}');
 
-      // ค้นหาการจองที่มีเวลาหมดอายุน้อยกว่าเวลาปัจจุบัน และยังมีสถานะ pending
-      QuerySnapshot expiredBookingsSnapshot = await _firestore
+      // ค้นหาคำขอที่มีสถานะ pending และหมดเวลาแล้ว
+      final expiredBookingsSnapshot = await _firestore
           .collection('bookings')
           .where('status', isEqualTo: 'pending')
-          .where('expirationTime', isLessThan: nowTimestamp)
+          .where('expirationTime', isLessThan: Timestamp.fromDate(now))
           .get();
 
-      print('Found ${expiredBookingsSnapshot.docs.length} expired bookings');
+      print(
+          'Found ${expiredBookingsSnapshot.docs.length} expired booking requests');
 
-      // อัพเดทสถานะการจองที่หมดอายุเป็น cancelled
+      // อัพเดตสถานะคำขอที่หมดเวลา
+      final batch = _firestore.batch();
+      final List<String> processedBookings = [];
+
       for (var doc in expiredBookingsSnapshot.docs) {
-        Map<String, dynamic> bookingData = doc.data() as Map<String, dynamic>;
-        String bookingId = doc.id;
+        final bookingId = doc.id;
+        final data = doc.data();
+        final userId = data['userId'];
+        final sitterId = data['sitterId'];
 
-        // อัพเดทสถานะเป็นยกเลิก
-        await _firestore.collection('bookings').doc(bookingId).update({
-          'status': 'cancelled',
+        processedBookings.add(bookingId);
+        print('Processing expired booking: $bookingId');
+
+        // อัพเดตสถานะเป็น expired
+        batch.update(doc.reference, {
+          'status': 'expired',
+          'cancelReason': 'คำขอหมดเวลาอัตโนมัติหลังจาก 15 นาที',
           'updatedAt': FieldValue.serverTimestamp(),
-          'cancellationReason': 'ระบบยกเลิกอัตโนมัติเนื่องจากคำขอหมดเวลา',
         });
 
-        // สร้างการแจ้งเตือนสำหรับแอดมิน
-        await _firestore.collection('admin_notifications').add({
+        // สร้างการแจ้งเตือนให้แอดมิน
+        final adminNotifRef =
+            _firestore.collection('admin_notifications').doc();
+        batch.set(adminNotifRef, {
+          'title': 'คำขอการจองหมดเวลา',
+          'message':
+              'คำขอการจอง $bookingId ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ',
           'type': 'booking_expired',
           'bookingId': bookingId,
-          'message': 'การจองรหัส $bookingId หมดเวลาและถูกยกเลิกอัตโนมัติ',
-          'createdAt': FieldValue.serverTimestamp(),
+          'timestamp': FieldValue.serverTimestamp(),
           'isRead': false,
         });
 
-        // ส่งการแจ้งเตือนไปยังผู้ใช้
-        if (bookingData.containsKey('userId')) {
-          await _notificationService.sendBookingStatusNotification(
-            userId: bookingData['userId'],
-            bookingId: bookingId,
-            status: 'auto_cancelled',
-            message: 'การจองของคุณหมดเวลาและถูกยกเลิกอัตโนมัติ',
-          );
+        // สร้างการแจ้งเตือนให้ผู้ใช้
+        if (userId != null) {
+          final userNotifRef = _firestore
+              .collection('users')
+              .doc(userId)
+              .collection('notifications')
+              .doc();
+
+          batch.set(userNotifRef, {
+            'title': 'คำขอการจองหมดเวลา',
+            'message':
+                'คำขอการจองของคุณได้หมดเวลาแล้ว กรุณาทำรายการใหม่อีกครั้ง',
+            'type': 'booking_expired',
+            'bookingId': bookingId,
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
         }
 
-        // ส่งการแจ้งเตือนไปยังพี่เลี้ยง
-        if (bookingData.containsKey('sitterId')) {
-          await _notificationService.sendBookingStatusNotification(
-            userId: bookingData['sitterId'],
-            bookingId: bookingId,
-            status: 'auto_cancelled',
-            message: 'การจองหมดเวลาและถูกยกเลิกอัตโนมัติ',
-          );
+        // สร้างการแจ้งเตือนให้ผู้รับเลี้ยง
+        if (sitterId != null) {
+          final sitterNotifRef = _firestore
+              .collection('users')
+              .doc(sitterId)
+              .collection('notifications')
+              .doc();
+
+          batch.set(sitterNotifRef, {
+            'title': 'คำขอการจองหมดเวลา',
+            'message': 'คำขอการจองได้หมดเวลาแล้ว',
+            'type': 'booking_expired',
+            'bookingId': bookingId,
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
         }
+      }
 
-        print('Auto-cancelled expired booking: $bookingId');
+      // ประมวลผลการเปลี่ยนแปลงทั้งหมด
+      await batch.commit();
+
+      if (processedBookings.isNotEmpty) {
+        print(
+            'Successfully processed expired bookings: ${processedBookings.join(", ")}');
+      } else {
+        print('No expired bookings to process');
       }
     } catch (e) {
-      print('Error cleaning up expired bookings: $e');
-    }
-  }
-
-// แก้ไขฟังก์ชัน runCleanupTasks เพื่อเรียกใช้ฟังก์ชันใหม่
-  Future<void> runCleanupTasks() async {
-    try {
-      print('Starting cleanup tasks...');
-
-      // Check expired bookings immediately
-      await checkExpiredBookingsImmediately();
-
-      // Run all cleanup tasks
-      await cleanupPendingBookings();
-      await cleanupExpiredBookings();
-      await cleanupOldBookings();
-
-      print('All cleanup tasks completed successfully');
-    } catch (e) {
-      print('Error running cleanup tasks: $e');
-      throw e; // Re-throw to allow error handling by caller
-    }
-  }
-
-// เพิ่มฟังก์ชันตรวจสอบทันทีเมื่อเปิดแอป
-  Future<void> checkExpiredBookingsImmediately() async {
-    print('Checking expired bookings immediately...');
-    await cleanupExpiredBookings();
-    print('Immediate expired bookings check completed');
-  }
-
-  // ตรวจสอบและลบคิวการจองเก่าที่เสร็จสิ้นหรือยกเลิกไปแล้วเกินกว่าระยะเวลาที่กำหนด
-  Future<void> cleanupOldBookings({int daysToKeep = 90}) async {
-    try {
-      // คำนวณเวลาที่เกินกำหนด
-      DateTime cutoffDate = DateTime.now().subtract(Duration(days: daysToKeep));
-      Timestamp cutoffTimestamp = Timestamp.fromDate(cutoffDate);
-
-      // ค้นหาการจองเก่าที่มีสถานะ completed หรือ cancelled
-      QuerySnapshot oldBookings = await _firestore
-          .collection('bookings')
-          .where('status', whereIn: ['completed', 'cancelled'])
-          .where('updatedAt', isLessThan: cutoffTimestamp)
-          .get();
-
-      print('Found ${oldBookings.docs.length} old bookings to clean up');
-
-      // ลบการจองเก่า
-      for (var doc in oldBookings.docs) {
-        String bookingId = doc.id;
-        await _firestore.collection('bookings').doc(bookingId).delete();
-
-        print('Deleted old booking: $bookingId');
-      }
-    } catch (e) {
-      print('Error cleaning up old bookings: $e');
+      print('Error checking expired bookings: $e');
     }
   }
 }

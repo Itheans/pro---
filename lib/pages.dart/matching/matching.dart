@@ -566,7 +566,7 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
   Future<void> _proceedToSitterSearch() async {
     if (widget.catIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one cat')),
+        const SnackBar(content: Text('กรุณาเลือกแมวอย่างน้อย 1 ตัว')),
       );
       return;
     }
@@ -592,10 +592,19 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
         return;
       }
 
-      // เพิ่มเวลาหมดอายุ 15 นาที
+      // คำนวณเวลาหมดอายุ 15 นาทีจากเวลาปัจจุบัน
       final DateTime expirationTime = DateTime.now().add(Duration(minutes: 15));
 
-// ปรับปรุง object bookingRequest ให้มีเวลาหมดอายุ
+      // แสดงข้อความคำขอจะหมดอายุในอีก 15 นาที
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'คำขอนี้จะหมดอายุในเวลา ${DateFormat('HH:mm').format(expirationTime)}'),
+          duration: Duration(seconds: 5),
+        ),
+      );
+
+      // สร้างข้อมูลการจอง
       final bookingRequest = {
         'userId': user.uid,
         'catIds': catIds,
@@ -603,21 +612,21 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
             widget.targetDates.map((date) => Timestamp.fromDate(date)).toList(),
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
-        'expirationTime': Timestamp.fromDate(DateTime.now()
-            .add(Duration(minutes: 15))), // เพิ่มเวลาหมดอายุ 15 นาที
+        'expirationTime':
+            Timestamp.fromDate(expirationTime), // เพิ่มเวลาหมดอายุ 15 นาที
         'sitterId': availableSitters.first['id'], // เลือกผู้รับเลี้ยงคนแรกที่พบ
       };
 
       // บันทึกข้อมูลลงใน Firestore
       DocumentReference bookingRef = await FirebaseFirestore.instance
-          .collection('bookings') // เปลี่ยนจาก booking_requests เป็น bookings
+          .collection('bookings')
           .add(bookingRequest);
 
       // แจ้งเตือนผู้ใช้ว่าบันทึกข้อมูลแล้ว
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content:
-                Text('บันทึกข้อมูลการจองสำเร็จ คำขอนี้จะหมดอายุใน 15 นาที')),
+            content: Text(
+                'บันทึกข้อมูลการจองสำเร็จ คำขอนี้จะหมดอายุใน 15 นาที (เวลา ${DateFormat('HH:mm').format(expirationTime)})')),
       );
 
       // เลือกผู้รับเลี้ยงจาก availableSitters ที่ได้ค้นหาไว้แล้ว
@@ -633,9 +642,7 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text('บันทึกข้อมูลการจองสำเร็จ คำขอนี้จะหมดอายุใน 15 นาที')),
+        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
       );
     }
   }

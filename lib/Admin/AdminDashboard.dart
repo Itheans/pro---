@@ -129,14 +129,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
         batch.set(adminNotifRef, {
           'title': 'คำขอการจองหมดเวลา',
-          'message': 'คำขอการจอง ' +
-              bookingId +
-              ' ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ',
+          'message':
+              'คำขอการจอง $bookingId ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ',
           'type': 'booking_expired',
           'bookingId': bookingId,
           'timestamp': FieldValue.serverTimestamp(),
           'isRead': false,
         });
+
+        // เพิ่มการแจ้งเตือนให้กับผู้ใช้ด้วย
+        final userData = doc.data();
+        final userId = userData['userId'];
+        if (userId != null) {
+          final userNotifRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('notifications')
+              .doc();
+
+          batch.set(userNotifRef, {
+            'title': 'คำขอการจองหมดเวลา',
+            'message':
+                'คำขอการจองของคุณได้หมดเวลาแล้ว กรุณาทำรายการใหม่อีกครั้ง',
+            'type': 'booking_expired',
+            'bookingId': bookingId,
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
+        }
       }
 
       // ดำเนินการตามการเปลี่ยนแปลงทั้งหมด
