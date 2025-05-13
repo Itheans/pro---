@@ -10,16 +10,16 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 // แก้ไขส่วนของ scheduled function (ตรวจสอบให้แน่ใจว่ามีการเปิดใช้งาน billing สำหรับโปรเจค)
 if (functions.pubsub) {
   exports.checkExpiredBookings = functions.pubsub
-    .schedule('every 5 minutes')
-    .onRun(async (context) => {
-      try {
-        await checkExpiredBookingsLogic();
-        return null;
-      } catch (error) {
-        console.error("Error checking expired bookings:", error);
-        return null;
-      }
-    });}
+  .schedule('every 5 minutes')
+  .onRun(async (context) => {
+    try {
+      await checkExpiredBookingsLogic();
+      return null;
+    } catch (error) {
+      console.error("Error checking expired bookings:", error);
+      return null;
+    }
+  });}
 
 // ฟังก์ชันหลักสำหรับการตรวจสอบการจองที่หมดอายุ
 const checkExpiredBookingsLogic = async () => {
