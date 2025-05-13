@@ -120,41 +120,6 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
     }
   }
 
-  Future<void> _runCleanupNow() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      BookingCleanupService cleanupService = BookingCleanupService();
-      await cleanupService.cleanupPendingBookings(
-        timeoutMinutes: _bookingTimeoutMinutes,
-      );
-      await cleanupService.cleanupOldBookings(
-        daysToKeep: _oldBookingsDays,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('ทำความสะอาดคิวการจองเรียบร้อยแล้ว'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      print('Error running cleanup: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('เกิดข้อผิดพลาดในการทำความสะอาดคิว: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -305,19 +270,7 @@ class _AdminSettingsPageState extends State<AdminSettingsPage> {
                           SizedBox(height: 16),
 
                           // ปุ่มทำความสะอาดทันที
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _runCleanupNow,
-                              icon: Icon(Icons.cleaning_services),
-                              label: Text('ทำความสะอาดคิวทันที'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.deepOrange,
-                                foregroundColor: Colors.white,
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                              ),
-                            ),
-                          ),
+
                           SizedBox(height: 8),
                           Text(
                             'ทำความสะอาดคิวทันทีตามการตั้งค่าปัจจุบัน',

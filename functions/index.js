@@ -3,9 +3,9 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
-// ตรวจสอบว่ากำลังรันบน emulator หรือไม่
-const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
-console.log("functions has pubsub:", Boolean(functions.pubsub));
+
+console.log("Environment:", process.env.NODE_ENV || "production");
+console.log("Firebase Functions initialized");
 
 // ฟังก์ชันหลักสำหรับการตรวจสอบการจองที่หมดอายุ
 const checkExpiredBookingsLogic = async () => {
@@ -136,56 +136,87 @@ exports.checkExpiredBookings = functions.pubsub
  */
 async function sendPushNotifications(userId, sitterId, bookingId) {
   try {
-    // ดึง FCM token ของผู้ใช้และผู้รับเลี้ยง
+    // ตรวจสอบว่ามีค่า userId และ sitterId หรือไม่
+    if (!userId || !sitterId) {
+      console.log("Missing userId or sitterId, skipping push notifications");
+      return;
+    }
+    
+    // ดึงข้อมูลผู้ใช้
     const userDoc = await admin.firestore()
         .collection("users")
         .doc(userId)
         .get();
+    
+    // ดึงข้อมูลผู้รับเลี้ยง
     const sitterDoc = await admin.firestore()
         .collection("users")
         .doc(sitterId)
         .get();
     
+    // ตรวจสอบว่าเอกสารมีอยู่จริง
+    if (!userDoc.exists || !sitterDoc.exists) {
+      console.log("User or sitter document not found");
+      return;
+    }
+    
     const userData = userDoc.data();
     const sitterData = sitterDoc.data();
     
-    // ถ้ามี FCM token ให้ส่งการแจ้งเตือน
+    // ส่งการแจ้งเตือนเฉพาะเมื่อมี FCM token
     if (userData && userData.fcmToken) {
-      await admin.messaging().send({
-        token: userData.fcmToken,
-        notification: {
-          title: "คำขอการจองหมดเวลา",
-          body: "คำขอการจองของคุณได้หมดเวลาแล้ว กรุณาทำรายการใหม่อีกครั้ง",
-        },
-        data: {
-          type: "booking_expired",
-          bookingId: bookingId,
-        },
-      });
+      try {
+        await admin.messaging().send({
+          token: userData.fcmToken,
+          notification: {
+            title: "คำขอการจองหมดเวลา",
+            body: "คำขอการจองของคุณได้หมดเวลาแล้ว กรุณาทำรายการใหม่อีกครั้ง",
+          },
+          data: {
+            type: "booking_expired",
+            bookingId: bookingId,
+          },
+        });
+        console.log("Sent notification to user", userId);
+      } catch (err) {
+        console.error("Failed to send notification to user:", err);
+      }
     }
     
     if (sitterData && sitterData.fcmToken) {
-      await admin.messaging().send({
-        token: sitterData.fcmToken,
-        notification: {
-          title: "คำขอการจองหมดเวลา",
-          body: "คำขอการจองได้หมดเวลาแล้ว",
-        },
-        data: {
-          type: "booking_expired",
-          bookingId: bookingId,
-        },
-      });
+      try {
+        await admin.messaging().send({
+          token: sitterData.fcmToken,
+          notification: {
+            title: "คำขอการจองหมดเวลา",
+            body: "คำขอการจองได้หมดเวลาแล้ว",
+          },
+          data: {
+            type: "booking_expired",
+            bookingId: bookingId,
+          },
+        });
+        console.log("Sent notification to sitter", sitterId);
+        console.log("Successfully updated all expired bookings. Found:", expiredRequestsSnapshot.size);
+return { 
+  success: true, 
+  processedCount: expiredRequestsSnapshot.size,
+  message: "Successfully processed all expired booking requests." 
+};
+      } catch (err) {
+        console.error("Failed to send notification to sitter:", err);
+      }
     }
   } catch (error) {
-    console.error("Error sending push notifications:", error);
+    console.error("Error in sendPushNotifications:", error);
   }
 }
 // ใช้ Firestore trigger แทน HTTP trigger
 exports.checkExpiredBookingsByFirestore = functions.firestore
   .document('triggers/checkExpiredBookings')
-  .onUpdate(async (change, context) => {
+  .onWrite(async (change, context) => {
     try {
+      console.log("Firestore trigger activated");
       await checkExpiredBookingsLogic();
       return null;
     } catch (error) {
@@ -193,3 +224,31 @@ exports.checkExpiredBookingsByFirestore = functions.firestore
       return null;
     }
   });
+
+  // เพิ่มฟังก์ชันใหม่
+exports.initializeBookingTriggers = functions.https.onRequest(async (req, res) => {
+  try {
+    // ตรวจสอบว่าเอกสารมีอยู่แล้วหรือไม่
+    const triggerDoc = await admin.firestore()
+      .collection('triggers')
+      .doc('checkExpiredBookings')
+      .get();
+      
+    if (!triggerDoc.exists) {
+      // ถ้ายังไม่มีเอกสาร ให้สร้างใหม่
+      await admin.firestore()
+        .collection('triggers')
+        .doc('checkExpiredBookings')
+        .set({
+          lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
+          initialized: true
+        });
+      console.log("Created initial trigger document");
+    }
+    
+    res.status(200).send("Booking triggers initialized successfully");
+  } catch (error) {
+    console.error("Error initializing booking triggers:", error);
+    res.status(500).send("Error initializing booking triggers: " + error.message);
+  }
+});
