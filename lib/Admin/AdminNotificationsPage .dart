@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:myproject/Admin/BookingDetailPage.dart';
+import 'package:myproject/Admin/BookingManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
 
 class AdminNotificationsPage extends StatefulWidget {
@@ -26,10 +28,23 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
     });
 
     try {
+      // เพิ่ม print statement เพื่อดีบัก
+      print('เริ่มโหลดการแจ้งเตือน');
+
+      // ใช้ orderBy เพื่อให้การแจ้งเตือนล่าสุดอยู่ด้านบน
       final snapshot = await FirebaseFirestore.instance
           .collection('admin_notifications')
           .orderBy('timestamp', descending: true)
           .get();
+
+      print('พบการแจ้งเตือนทั้งหมด: ${snapshot.docs.length}');
+
+      // แสดงประเภทของการแจ้งเตือนทั้งหมดที่พบ
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        print(
+            'พบการแจ้งเตือนประเภท: ${data['type']}, สถานะการอ่าน: ${data['isRead']}');
+      }
 
       setState(() {
         _notifications = snapshot.docs;
@@ -248,6 +263,28 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
                                     builder: (context) =>
                                         SitterVerificationPage()),
                               );
+                            }
+                            // เพิ่มเงื่อนไขสำหรับคำขอที่หมดเวลา
+                            else if (type == 'booking_expired') {
+                              // ดึงรหัสการจองจากข้อมูลการแจ้งเตือน
+                              String bookingId = data['bookingId'] ?? '';
+                              if (bookingId.isNotEmpty) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        BookingDetailPage(bookingId: bookingId),
+                                  ),
+                                );
+                              } else {
+                                // ถ้าไม่มี bookingId นำไปยังหน้าจัดการการจองทั้งหมดแทน
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          BookingManagementPage()),
+                                );
+                              }
                             }
                           },
                         ),

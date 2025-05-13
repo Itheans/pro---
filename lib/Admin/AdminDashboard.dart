@@ -14,6 +14,7 @@ import 'package:myproject/Admin/SitterIncomeReport.dart';
 import 'package:myproject/Admin/BatchBookingManagementPage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:myproject/pages.dart/login.dart';
+import 'package:http/http.dart' as http;
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -85,6 +86,143 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  Future<void> _checkExpiredBookingsInApp() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // แสดงข้อความกำลังตรวจสอบ
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('กำลังตรวจสอบคำขอหมดเวลา กรุณารอสักครู่...')),
+      );
+
+      // ดึงคำขอที่มีสถานะ pending และหมดเวลาแล้ว
+      final now = DateTime.now();
+      final expiredBookingsSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .where('status', isEqualTo: 'pending')
+          .where('expirationTime', isLessThan: Timestamp.fromDate(now))
+          .get();
+
+      print('พบคำขอที่หมดเวลา: ${expiredBookingsSnapshot.docs.length} รายการ');
+
+      // อัพเดตสถานะคำขอที่หมดเวลา
+      final batch = FirebaseFirestore.instance.batch();
+      final List<String> expiredBookingIds = [];
+
+      for (var doc in expiredBookingsSnapshot.docs) {
+        final bookingId = doc.id;
+        expiredBookingIds.add(bookingId);
+
+        // อัพเดตสถานะเป็น expired
+        batch.update(doc.reference, {
+          'status': 'expired',
+          'cancelReason': 'คำขอหมดเวลาอัตโนมัติหลังจาก 15 นาที',
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // สร้างการแจ้งเตือนให้แอดมิน
+        final adminNotifRef =
+            FirebaseFirestore.instance.collection('admin_notifications').doc();
+
+        batch.set(adminNotifRef, {
+          'title': 'คำขอการจองหมดเวลา',
+          'message': 'คำขอการจอง ' +
+              bookingId +
+              ' ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ',
+          'type': 'booking_expired',
+          'bookingId': bookingId,
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+        });
+      }
+
+      // ดำเนินการตามการเปลี่ยนแปลงทั้งหมด
+      await batch.commit();
+
+      // โหลดข้อมูลใหม่
+      await _loadDashboardData();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'ตรวจสอบและอัพเดตคำขอหมดเวลาสำเร็จ: ${expiredBookingIds.length} รายการ'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error checking expired bookings: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาด: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // เพิ่มเมธอดนี้ในคลาส _AdminDashboardState
+  Future<void> _checkExpiredBookingsManually() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // แสดงข้อความกำลังตรวจสอบ
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('กำลังตรวจสอบคำขอหมดเวลา กรุณารอสักครู่...')),
+      );
+
+      // โหลดข้อมูลสรุปใหม่ แทนการเรียกใช้ Cloud Function โดยตรง
+      await _loadDashboardData();
+
+      // สร้าง Firebase Function ที่ใช้ Firestore Trigger แทน HTTP Trigger
+      // โดยอัพเดตเอกสารใน Firestore เพื่อกระตุ้นให้ function ทำงาน
+      try {
+        await FirebaseFirestore.instance
+            .collection('triggers')
+            .doc('checkExpiredBookings')
+            .set({
+          'lastTriggered': FieldValue.serverTimestamp(),
+          'triggeredBy': 'admin',
+          'manual': true
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ส่งคำขอตรวจสอบการจองที่หมดเวลาสำเร็จ'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (firestoreError) {
+        print('Error triggering function via Firestore: $firestoreError');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เกิดข้อผิดพลาดในการส่งคำขอ: $firestoreError'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error checking expired bookings: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาด: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _loadDashboardData() async {
     setState(() {
       _isLoading = true;
@@ -133,13 +271,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           .where('isRead', isEqualTo: false)
           .get();
 
+// เพิ่มโค้ดนี้ต่อจากข้างบน
       final expiredBookingsNotificationsSnapshot = await FirebaseFirestore
           .instance
           .collection('admin_notifications')
           .where('type', isEqualTo: 'booking_expired')
           .where('isRead', isEqualTo: false)
           .get();
-
       // คำนวณรายได้ทั้งหมด
       double totalRevenue = 0;
       for (var doc in completedBookingsSnapshot.docs) {
@@ -416,6 +554,68 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     // แสดงรายการจองล่าสุด (เรียกใช้เพียงครั้งเดียว)
                     _buildRecentBookingsSection(),
                     SizedBox(height: 24),
+                    Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.2),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(Icons.settings_applications,
+                                    color: Colors.blue.shade700),
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'เครื่องมือจัดการระบบ',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'ตรวจสอบและทำงานกับคำขอที่หมดเวลาโดยตรง',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 14,
+                            ),
+                          ),
+                          SizedBox(height: 16),
+                          ElevatedButton.icon(
+                            onPressed: _checkExpiredBookingsManually,
+                            icon: Icon(Icons.refresh),
+                            label: Text('ตรวจสอบคำขอหมดเวลาทันที'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              foregroundColor: Colors.white,
+                              minimumSize: Size(double.infinity, 50),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                     // เพิ่ม padding ด้านล่างเพื่อป้องกัน overflow
                     SizedBox(height: 80),
@@ -967,6 +1167,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ).then((_) => _loadDashboardData());
           },
           badgeCount: _expiredBookingsCount,
+        ),
+
+        // เพิ่มปุ่มตรวจสอบคำขอหมดเวลาทันที
+        SizedBox(height: 20),
+        Container(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _checkExpiredBookingsManually,
+            icon: Icon(Icons.refresh),
+            label: Text('ตรวจสอบคำขอหมดเวลาทันที'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue.shade700,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.symmetric(vertical: 15),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 2,
+            ),
+          ),
         ),
       ],
     );

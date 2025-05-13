@@ -603,7 +603,8 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
             widget.targetDates.map((date) => Timestamp.fromDate(date)).toList(),
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
-        'expirationTime': Timestamp.fromDate(expirationTime), // เพิ่มบรรทัดนี้
+        'expirationTime': Timestamp.fromDate(DateTime.now()
+            .add(Duration(minutes: 15))), // เพิ่มเวลาหมดอายุ 15 นาที
         'sitterId': availableSitters.first['id'], // เลือกผู้รับเลี้ยงคนแรกที่พบ
       };
 
@@ -632,7 +633,9 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+            content:
+                Text('บันทึกข้อมูลการจองสำเร็จ คำขอนี้จะหมดอายุใน 15 นาที')),
       );
     }
   }

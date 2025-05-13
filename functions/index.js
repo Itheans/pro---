@@ -1,3 +1,4 @@
+// functions/index.js
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
@@ -5,34 +6,20 @@ admin.initializeApp();
 // ตรวจสอบว่ากำลังรันบน emulator หรือไม่
 const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
 console.log("functions has pubsub:", Boolean(functions.pubsub));
-const { onSchedule } = require("firebase-functions/v2/scheduler");
-
-// แก้ไขส่วนของ scheduled function (ตรวจสอบให้แน่ใจว่ามีการเปิดใช้งาน billing สำหรับโปรเจค)
-if (functions.pubsub) {
-  exports.checkExpiredBookings = functions.pubsub
-    .schedule('every 5 minutes')
-    .onRun(async (context) => {
-      try {
-        await checkExpiredBookingsLogic();
-        return null;
-      } catch (error) {
-        console.error("Error checking expired bookings:", error);
-        return null;
-      }
-    });}
 
 // ฟังก์ชันหลักสำหรับการตรวจสอบการจองที่หมดอายุ
 const checkExpiredBookingsLogic = async () => {
   console.log("Checking for expired booking requests...");
   
   const now = admin.firestore.Timestamp.now();
+  console.log("Current time:", now.toDate());
   
-  // ค้นหาคำขอที่หมดเวลาและยังอยู่ในสถานะ pending
+  // ค้นหาคำขอที่หมดเวลา
   const expiredRequestsSnapshot = await admin.firestore()
-      .collection("booking_requests")
-      .where("status", "==", "pending")
-      .where("expirationTime", "<", now)
-      .get();
+    .collection("bookings")
+    .where("status", "==", "pending")
+    .where("expirationTime", "<", now)
+    .get();
   
   console.log(`Found ${expiredRequestsSnapshot.size} expired requests`);
   
@@ -93,19 +80,22 @@ const checkExpiredBookingsLogic = async () => {
     
     // สร้างการแจ้งเตือนให้แอดมิน
     const adminNotification = {
-      title: "คำขอการจองหมดเวลา",
-      message: 
-          `คำขอการจอง ${bookingId} ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ`,
-      type: "booking_expired",
-      bookingId: bookingId,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      isRead: false,
-    };
-    
-    const adminNotifRef = admin.firestore()
-        .collection("admin_notifications")
-        .doc();
-    batch.set(adminNotifRef, adminNotification);
+  title: "คำขอการจองหมดเวลา",
+  message: `คำขอการจอง ${bookingId} ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ`,
+  type: "booking_expired",
+  bookingId: bookingId,
+  timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  isRead: false,
+};
+
+console.log("Creating admin notification:", adminNotification);
+
+const adminNotifRef = admin.firestore()
+    .collection("admin_notifications")
+    .doc();
+batch.set(adminNotifRef, adminNotification);
+
+
     
     // ส่ง push notification (ถ้ามี FCM token)
     if (userId && sitterId) {
@@ -124,29 +114,19 @@ const checkExpiredBookingsLogic = async () => {
 };
 
 // สร้างฟังก์ชัน HTTP สำหรับการทดสอบบน emulator
-exports.checkExpiredBookingsHttp = functions.https.onRequest(async (req, res) => {
-  try {
-    const result = await checkExpiredBookingsLogic();
-    res.status(200).send(`Successfully updated expired bookings. Processed: ${result.processedCount} items`);
-  } catch (error) {
-    console.error("Error checking expired bookings:", error);
-    res.status(500).send("Error checking expired bookings: " + error.message);
-  }
-});
-
-// สร้างฟังก์ชัน scheduled สำหรับการใช้งานจริง
 exports.checkExpiredBookings = functions.pubsub
   .schedule('every 5 minutes')
   .onRun(async (context) => {
     try {
-      await checkExpiredBookingsLogic();
+      console.log("Starting expired bookings check...");
+      const result = await checkExpiredBookingsLogic();
+      console.log("Completed expired bookings check. Processed:", result.processedCount);
       return null;
     } catch (error) {
       console.error("Error checking expired bookings:", error);
       return null;
     }
   });
-
 /**
  * ฟังก์ชันส่ง push notification
  * @param {string} userId - ไอดีของผู้ใช้
@@ -201,19 +181,7 @@ async function sendPushNotifications(userId, sitterId, bookingId) {
     console.error("Error sending push notifications:", error);
   }
 }
-// ใช้ Cloud Function scheduled trigger ในรูปแบบ อื่น (อาจทำงานได้กับเวอร์ชันเก่า)
-exports.checkExpiredBookingsCron = functions.pubsub
-  .topic('firebase-schedule-checkExpiredBookings')
-  .onPublish(async (message) => {
-    try {
-      await checkExpiredBookingsLogic();
-      return null;
-    } catch (error) {
-      console.error("Error checking expired bookings:", error);
-      return null;
-    }
-  });
-  // ใช้ Firestore trigger แทน
+// ใช้ Firestore trigger แทน HTTP trigger
 exports.checkExpiredBookingsByFirestore = functions.firestore
   .document('triggers/checkExpiredBookings')
   .onUpdate(async (change, context) => {
@@ -225,15 +193,3 @@ exports.checkExpiredBookingsByFirestore = functions.firestore
       return null;
     }
   });
-  // ใช้ V2 API สำหรับ scheduled function
-exports.checkExpiredBookingsScheduled = onSchedule({
-  schedule: "every 5 minutes"
-}, async (context) => {
-  try {
-    await checkExpiredBookingsLogic();
-    return null;
-  } catch (error) {
-    console.error("Error checking expired bookings:", error);
-    return null;
-  }
-});
