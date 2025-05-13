@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
 import 'package:myproject/Admin/AdminSettingsPage.dart';
+import 'package:myproject/Admin/ChecklistManagementPage.dart';
 import 'package:myproject/Admin/ScheduledTasksManager.dart';
 import 'package:myproject/Admin/ServiceFeeManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
@@ -1147,11 +1148,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Icons.attach_money,
           Colors.teal,
           () {
+            // ตำแหน่งที่มีการเรียกใช้ ServiceFeeManagementPage
+
             Navigator.push(
               context,
               MaterialPageRoute(
                   builder: (context) => ServiceFeeManagementPage()),
-            ).then((_) => _loadDashboardData());
+            ).then((value) {
+              // เรียกใช้ _loadDashboardData หลังจากกลับมาจากหน้าจัดการค่าบริการ
+              // เพื่อให้แน่ใจว่าข้อมูลถูกรีเฟรช
+              _loadDashboardData();
+            });
           },
         ),
         SizedBox(height: 8),
@@ -1168,6 +1175,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
           },
           badgeCount: _expiredBookingsCount,
         ),
+        // เพิ่มเมนูจัดการเช็คลิสต์
+        _buildManagementCard(
+          'ตรวจสอบเช็คลิสต์',
+          'ดูรายละเอียดการดูแลแมวจากเช็คลิสต์ของผู้รับเลี้ยง',
+          Icons.checklist,
+          Colors.teal,
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChecklistManagementPage(),
+              ),
+            );
+          },
+        ),
+        SizedBox(height: 8),
 
         // เพิ่มปุ่มตรวจสอบคำขอหมดเวลาทันที
         SizedBox(height: 20),

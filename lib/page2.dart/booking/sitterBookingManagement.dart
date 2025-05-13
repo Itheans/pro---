@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:myproject/page2.dart/BookingAcceptancePage.dart';
 import 'package:myproject/page2.dart/ActiveBookingsPage.dart'; // นำเข้า ActiveBookingsPage จากไฟล์นี้เท่านั้น
 import 'package:myproject/page2.dart/scheduleincomepage.dart'; // นำเข้า ScheduleIncomePage อย่างถูกต้อง
+import 'package:myproject/page2.dart/sitter_checklist_page.dart';
 import 'package:myproject/widget/widget_support.dart';
 
 class SitterBookingManagement extends StatefulWidget {
@@ -239,6 +240,41 @@ class _SitterBookingManagementState extends State<SitterBookingManagement> {
             ),
           ).then((_) => _loadSummaryData()),
           badge: _acceptedBookings > 0 ? _acceptedBookings.toString() : null,
+        ),
+        const SizedBox(height: 16),
+
+        // เพิ่มการ์ดเช็คลิสต์การดูแลแมว
+        _buildOptionCard(
+          'เช็คลิสต์การดูแลแมว',
+          'บันทึกกิจกรรมที่ทำและถ่ายรูปการดูแลแมว',
+          Icons.checklist,
+          Colors.purple,
+          () {
+            // ดึงรายการการจองที่กำลังดำเนินการ
+            FirebaseFirestore.instance
+                .collection('bookings')
+                .where('sitterId', isEqualTo: _auth.currentUser?.uid)
+                .where('status', whereIn: ['confirmed', 'in_progress'])
+                .orderBy('createdAt', descending: true)
+                .limit(1)
+                .get()
+                .then((snapshot) {
+                  if (snapshot.docs.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SitterChecklistPage(
+                          bookingId: snapshot.docs.first.id,
+                        ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('ไม่พบการจองที่กำลังดำเนินการ')),
+                    );
+                  }
+                });
+          },
         ),
         const SizedBox(height: 16),
 

@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:myproject/Admin/NotificationService.dart';
-import 'package:myproject/services/task_service.dart';
+import 'package:myproject/models/checklist_model.dart';
+import 'package:myproject/services/checklist_service.dart';
+
 import 'package:url_launcher/url_launcher.dart';
-import 'package:myproject/models/task_model.dart';
+
 
 class BookingDetailPage extends StatefulWidget {
   final String bookingId;
-  final TaskService _taskService = TaskService();
+  final ChecklistService _taskService = ChecklistService();
   BookingDetailPage({Key? key, required this.bookingId}) : super(key: key);
 
   @override
@@ -23,7 +25,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
   List<Map<String, dynamic>> _catsList = [];
   final NotificationService _notificationService = NotificationService();
   TextEditingController _messageController = TextEditingController();
-  final TaskService _taskService = TaskService();
+  final ChecklistService _taskService = ChecklistService();
 
   @override
   void initState() {
@@ -900,7 +902,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
       return Container();
     }
 
-    return StreamBuilder<List<TaskModel>>(
+    return StreamBuilder<List<ChecklistItem>>(
       stream: _taskService.getTasksForBooking(widget.bookingId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {

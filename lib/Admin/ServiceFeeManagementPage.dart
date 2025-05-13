@@ -12,19 +12,10 @@ class ServiceFeeManagementPage extends StatefulWidget {
 
 class _ServiceFeeManagementPageState extends State<ServiceFeeManagementPage> {
   bool _isLoading = true;
-
-  // ตัวแปรสำหรับเก็บข้อมูลค่าบริการ
   Map<String, dynamic> _serviceFees = {};
-
-  // ตัวควบคุมสำหรับฟิลด์ input
-  final TextEditingController _platformFeeController = TextEditingController();
-  final TextEditingController _minServiceRateController =
-      TextEditingController();
-  final TextEditingController _maxServiceRateController =
-      TextEditingController();
-  final TextEditingController _defaultServiceRateController =
-      TextEditingController();
-  final TextEditingController _taxRateController = TextEditingController();
+  final Map<String, TextEditingController> _controllers = {};
+  String _errorMessage = '';
+  bool _hasChanges = false;
 
   @override
   void initState() {
@@ -32,169 +23,128 @@ class _ServiceFeeManagementPageState extends State<ServiceFeeManagementPage> {
     _loadServiceFees();
   }
 
-  @override
-  void dispose() {
-    _platformFeeController.dispose();
-    _minServiceRateController.dispose();
-    _maxServiceRateController.dispose();
-    _defaultServiceRateController.dispose();
-    _taxRateController.dispose();
-    super.dispose();
-  }
-
-  // โหลดข้อมูลค่าบริการจาก Firestore
   Future<void> _loadServiceFees() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
-      // โหลดการตั้งค่าจาก Firestore
+      // ดึงข้อมูลจาก collection 'admin/service_fees'
       DocumentSnapshot feeDoc = await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('serviceFees')
+          .collection('admin')
+          .doc('service_fees')
           .get();
 
-      if (feeDoc.exists) {
-        Map<String, dynamic> data = feeDoc.data() as Map<String, dynamic>;
-        setState(() {
-          _serviceFees = data;
-        });
+      // ถ้าไม่มีข้อมูล ให้ใช้ค่าเริ่มต้น
+      if (!feeDoc.exists) {
+        _serviceFees = {
+          'baseFee': 100.0,
+          'commissionRate': 10.0,
+          'extraCatFee': 50.0,
+          'taxRate': 7.0,
+          'cancellationFee': 50.0,
+        };
 
-        // กำหนดค่าเริ่มต้นให้ controller
-        _platformFeeController.text =
-            (_serviceFees['platformFee'] ?? 0.0).toString();
-        _minServiceRateController.text =
-            (_serviceFees['minServiceRate'] ?? 0.0).toString();
-        _maxServiceRateController.text =
-            (_serviceFees['maxServiceRate'] ?? 0.0).toString();
-        _defaultServiceRateController.text =
-            (_serviceFees['defaultServiceRate'] ?? 0.0).toString();
-        _taxRateController.text = (_serviceFees['taxRate'] ?? 0.0).toString();
+        // สร้างเอกสารใหม่ด้วยค่าเริ่มต้น
+        await FirebaseFirestore.instance
+            .collection('admin')
+            .doc('service_fees')
+            .set(_serviceFees);
+
+        // สร้างเอกสารใหม่ในคอลเลคชัน service_fees ด้วย
+        await FirebaseFirestore.instance
+            .collection('service_fees')
+            .doc('default')
+            .set(_serviceFees);
       } else {
-        // ถ้ายังไม่มีข้อมูล ให้สร้างข้อมูลเริ่มต้น
-        await _createDefaultServiceFees();
+        _serviceFees = feeDoc.data() as Map<String, dynamic>;
       }
-    } catch (e) {
-      print('Error loading service fees: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูลค่าบริการ: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
+
+      // สร้าง controllers สำหรับแต่ละฟิลด์
+      _serviceFees.forEach((key, value) {
+        _controllers[key] = TextEditingController(
+            text: value is double ? value.toString() : value.toString());
+      });
+
       setState(() {
         _isLoading = false;
       });
-    }
-  }
-
-  // สร้างข้อมูลค่าบริการเริ่มต้น
-  Future<void> _createDefaultServiceFees() async {
-    try {
-      Map<String, dynamic> defaultFees = {
-        'platformFee': 10.0, // ค่าธรรมเนียมแพลตฟอร์ม (%)
-        'minServiceRate': 100.0, // ค่าบริการขั้นต่ำ (บาท)
-        'maxServiceRate': 1000.0, // ค่าบริการสูงสุด (บาท)
-        'defaultServiceRate': 300.0, // ค่าบริการเริ่มต้น (บาท)
-        'taxRate': 7.0, // อัตราภาษี (%)
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('serviceFees')
-          .set(defaultFees);
-
-      setState(() {
-        _serviceFees = defaultFees;
-        _platformFeeController.text = defaultFees['platformFee'].toString();
-        _minServiceRateController.text =
-            defaultFees['minServiceRate'].toString();
-        _maxServiceRateController.text =
-            defaultFees['maxServiceRate'].toString();
-        _defaultServiceRateController.text =
-            defaultFees['defaultServiceRate'].toString();
-        _taxRateController.text = defaultFees['taxRate'].toString();
-      });
     } catch (e) {
-      print('Error creating default service fees: $e');
-      throw e;
+      print('Error loading service fees: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'เกิดข้อผิดพลาดในการโหลดข้อมูล: $e';
+      });
     }
   }
 
-  // บันทึกการเปลี่ยนแปลงค่าบริการ
   Future<void> _saveServiceFees() async {
     setState(() {
       _isLoading = true;
+      _errorMessage = '';
     });
 
     try {
-      // แปลง string เป็น double
-      double platformFee = double.tryParse(_platformFeeController.text) ?? 0.0;
-      double minServiceRate =
-          double.tryParse(_minServiceRateController.text) ?? 0.0;
-      double maxServiceRate =
-          double.tryParse(_maxServiceRateController.text) ?? 0.0;
-      double defaultServiceRate =
-          double.tryParse(_defaultServiceRateController.text) ?? 0.0;
-      double taxRate = double.tryParse(_taxRateController.text) ?? 0.0;
+      // แปลงข้อมูลจาก controllers เป็น Map
+      Map<String, dynamic> updatedFees = {};
 
-      // ตรวจสอบความถูกต้องของข้อมูล
-      if (platformFee < 0 || platformFee > 100) {
-        throw Exception('ค่าธรรมเนียมแพลตฟอร์มต้องอยู่ระหว่าง 0-100%');
-      }
+      _controllers.forEach((key, controller) {
+        // แปลงข้อความเป็น double
+        double? value = double.tryParse(controller.text);
+        if (value != null) {
+          updatedFees[key] = value;
+        } else {
+          throw Exception('ค่า $key ไม่ถูกต้อง');
+        }
+      });
 
-      if (minServiceRate < 0) {
-        throw Exception('ค่าบริการขั้นต่ำต้องไม่ต่ำกว่า 0 บาท');
-      }
-
-      if (maxServiceRate <= minServiceRate) {
-        throw Exception('ค่าบริการสูงสุดต้องมากกว่าค่าบริการขั้นต่ำ');
-      }
-
-      if (defaultServiceRate < minServiceRate ||
-          defaultServiceRate > maxServiceRate) {
-        throw Exception(
-            'ค่าบริการเริ่มต้นต้องอยู่ระหว่างค่าบริการขั้นต่ำและสูงสุด');
-      }
-
-      if (taxRate < 0 || taxRate > 100) {
-        throw Exception('อัตราภาษีต้องอยู่ระหว่าง 0-100%');
-      }
-
-      // สร้างข้อมูลใหม่
-      Map<String, dynamic> updatedFees = {
-        'platformFee': platformFee,
-        'minServiceRate': minServiceRate,
-        'maxServiceRate': maxServiceRate,
-        'defaultServiceRate': defaultServiceRate,
-        'taxRate': taxRate,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      // บันทึกข้อมูลลง Firestore
+      // อัพเดทข้อมูลลง Firestore
       await FirebaseFirestore.instance
-          .collection('settings')
-          .doc('serviceFees')
-          .update(updatedFees);
+          .collection('admin')
+          .doc('service_fees')
+          .set(updatedFees, SetOptions(merge: true));
 
+      // อัพเดทข้อมูลใน service_fees/default ด้วย
+      await FirebaseFirestore.instance
+          .collection('service_fees')
+          .doc('default')
+          .set(updatedFees, SetOptions(merge: true));
+
+      print('Service fees saved successfully: $updatedFees');
+
+      // รีเซ็ตแคชในตัวคำนวณค่าบริการ (ถ้ามี)
+      try {
+        await FirebaseFirestore.instance
+            .collection('system')
+            .doc('cache')
+            .set({'serviceFeeLastUpdated': FieldValue.serverTimestamp()});
+      } catch (e) {
+        print('Note: Failed to update cache timestamp: $e');
+      }
+
+      // อัพเดทค่าในตัวแปร _serviceFees
       setState(() {
-        _serviceFees = updatedFees;
+        _serviceFees = Map.from(updatedFees);
+        _hasChanges = false;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('บันทึกการเปลี่ยนแปลงค่าบริการเรียบร้อยแล้ว'),
+          content: Text('บันทึกการตั้งค่าเรียบร้อยแล้ว'),
           backgroundColor: Colors.green,
         ),
       );
     } catch (e) {
       print('Error saving service fees: $e');
+      setState(() {
+        _errorMessage = 'เกิดข้อผิดพลาดในการบันทึกข้อมูล: $e';
+        _isLoading = false;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('เกิดข้อผิดพลาด: $e'),
+          content: Text('เกิดข้อผิดพลาด: $_errorMessage'),
           backgroundColor: Colors.red,
         ),
       );
@@ -203,6 +153,15 @@ class _ServiceFeeManagementPageState extends State<ServiceFeeManagementPage> {
         _isLoading = false;
       });
     }
+  }
+
+  @override
+  void dispose() {
+    // ล้าง controllers เมื่อออกจากหน้านี้
+    _controllers.forEach((key, controller) {
+      controller.dispose();
+    });
+    super.dispose();
   }
 
   @override
@@ -211,6 +170,18 @@ class _ServiceFeeManagementPageState extends State<ServiceFeeManagementPage> {
       appBar: AppBar(
         title: Text('จัดการค่าบริการ'),
         backgroundColor: Colors.deepOrange,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.save),
+            onPressed: _saveServiceFees,
+            tooltip: 'บันทึกการเปลี่ยนแปลง',
+          ),
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadServiceFees,
+            tooltip: 'รีเฟรชข้อมูล',
+          ),
+        ],
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator())
@@ -219,25 +190,85 @@ class _ServiceFeeManagementPageState extends State<ServiceFeeManagementPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(height: 20),
-
-                  // การตั้งค่าพี่เลี้ยงแมว
+                  // หัวข้อและคำอธิบาย
                   Card(
                     elevation: 2,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Padding(
-                      padding: EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.pets, color: Colors.deepOrange),
+                              Icon(Icons.info_outline,
+                                  color: Colors.deepOrange),
                               SizedBox(width: 8),
                               Text(
-                                'ค่าบริการพี่เลี้ยงแมว',
+                                'ข้อมูลการตั้งค่า',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'การเปลี่ยนแปลงค่าบริการจะมีผลกับการจองใหม่เท่านั้น ไม่มีผลกับการจองที่มีอยู่แล้ว',
+                            style: TextStyle(
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  // แสดงข้อผิดพลาด (ถ้ามี)
+                  if (_errorMessage.isNotEmpty)
+                    Container(
+                      padding: EdgeInsets.all(12),
+                      margin: EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline, color: Colors.red),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _errorMessage,
+                              style: TextStyle(color: Colors.red.shade800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // ฟอร์มค่าบริการ
+                  Card(
+                    elevation: 2,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.paid, color: Colors.green),
+                              SizedBox(width: 8),
+                              Text(
+                                'ค่าบริการพื้นฐาน',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -247,184 +278,99 @@ class _ServiceFeeManagementPageState extends State<ServiceFeeManagementPage> {
                           ),
                           SizedBox(height: 16),
 
-                          // ค่าบริการขั้นต่ำ
-                          Text(
-                            'ค่าบริการขั้นต่ำ (บาท/วัน)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          // สร้าง input fields สำหรับแต่ละค่าบริการ
+                          _buildFeeTextField(
+                            'ค่าบริการพื้นฐาน (บาท/วัน)',
+                            'baseFee',
+                            Icons.home,
                           ),
-                          SizedBox(height: 8),
-                          TextField(
-                            controller: _minServiceRateController,
-                            decoration: InputDecoration(
-                              hintText: 'ระบุจำนวนเงิน',
-                              border: OutlineInputBorder(),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Colors.deepOrange, width: 2),
-                              ),
-                              suffixText: 'บาท',
-                            ),
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
+                          _buildFeeTextField(
+                            'ค่าคอมมิชชั่น (%)',
+                            'commissionRate',
+                            Icons.account_balance,
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            'ค่าบริการขั้นต่ำที่พี่เลี้ยงแมวสามารถตั้งได้',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
+                          _buildFeeTextField(
+                            'ค่าธรรมเนียมแมวเพิ่ม (บาท/ตัว)',
+                            'extraCatFee',
+                            Icons.pets,
+                          ),
+                          _buildFeeTextField(
+                            'ภาษีมูลค่าเพิ่ม (%)',
+                            'taxRate',
+                            Icons.receipt,
+                          ),
+                          _buildFeeTextField(
+                            'ค่าธรรมเนียมการยกเลิก (บาท)',
+                            'cancellationFee',
+                            Icons.cancel,
                           ),
 
-                          SizedBox(height: 16),
-
-                          // ค่าบริการสูงสุด
-                          Text(
-                            'ค่าบริการสูงสุด (บาท/วัน)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          TextField(
-                            controller: _maxServiceRateController,
-                            decoration: InputDecoration(
-                              hintText: 'ระบุจำนวนเงิน',
-                              border: OutlineInputBorder(),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Colors.deepOrange, width: 2),
-                              ),
-                              suffixText: 'บาท',
-                            ),
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'ค่าบริการสูงสุดที่พี่เลี้ยงแมวสามารถตั้งได้',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
-
-                          SizedBox(height: 16),
-
-                          // ค่าบริการเริ่มต้น
-                          Text(
-                            'ค่าบริการเริ่มต้น (บาท/วัน)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 8),
-                          TextField(
-                            controller: _defaultServiceRateController,
-                            decoration: InputDecoration(
-                              hintText: 'ระบุจำนวนเงิน',
-                              border: OutlineInputBorder(),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                    color: Colors.deepOrange, width: 2),
-                              ),
-                              suffixText: 'บาท',
-                            ),
-                            keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'ค่าบริการเริ่มต้นสำหรับพี่เลี้ยงแมวรายใหม่',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
+                          // เพิ่มฟิลด์อื่นๆ ตามต้องการ
                         ],
                       ),
                     ),
                   ),
-
-                  SizedBox(height: 30),
+                  SizedBox(height: 24),
 
                   // ปุ่มบันทึก
-                  SizedBox(
+                  Container(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _saveServiceFees,
+                      onPressed: _saveServiceFees, // ปรับให้สามารถกดปุ่มได้เสมอ
                       icon: Icon(Icons.save),
                       label: Text('บันทึกการเปลี่ยนแปลง'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(vertical: 15),
+                        padding: EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                      ),
-                    ),
-                  ),
-
-                  SizedBox(height: 20),
-
-                  // ปุ่มรีเซ็ตเป็นค่าเริ่มต้น
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton.icon(
-                      onPressed: () async {
-                        bool confirm = await showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('ยืนยันการรีเซ็ต'),
-                            content: Text(
-                                'คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตค่าบริการเป็นค่าเริ่มต้น?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: Text('ยกเลิก'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                ),
-                                child: Text('รีเซ็ต'),
-                              ),
-                            ],
-                          ),
-                        );
-
-                        if (confirm == true) {
-                          // ลบข้อมูลเดิมและสร้างใหม่
-                          await FirebaseFirestore.instance
-                              .collection('settings')
-                              .doc('serviceFees')
-                              .delete();
-
-                          await _createDefaultServiceFees();
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                  'รีเซ็ตค่าบริการเป็นค่าเริ่มต้นเรียบร้อยแล้ว'),
-                              backgroundColor: Colors.blue,
-                            ),
-                          );
-                        }
-                      },
-                      icon: Icon(Icons.refresh),
-                      label: Text('รีเซ็ตเป็นค่าเริ่มต้น'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.red,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildFeeTextField(String label, String key, IconData icon) {
+    // ถ้าไม่มี controller สำหรับ key นี้ จะข้ามไป
+    if (!_controllers.containsKey(key)) return SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: TextField(
+        controller: _controllers[key],
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.deepOrange, width: 2),
+          ),
+        ),
+        keyboardType: TextInputType.numberWithOptions(decimal: true),
+        onChanged: (value) {
+          // ตรวจสอบว่ามีการเปลี่ยนแปลงค่าหรือไม่
+          double? newValue = double.tryParse(value);
+          double? oldValue = _serviceFees[key] is double
+              ? _serviceFees[key]
+              : double.tryParse(_serviceFees[key].toString());
+
+          print('Key: $key, New Value: $newValue, Old Value: $oldValue');
+
+          setState(() {
+            if (newValue != oldValue) {
+              _hasChanges = true;
+            }
+          });
+        },
+      ),
     );
   }
 }
