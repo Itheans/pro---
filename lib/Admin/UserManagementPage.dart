@@ -38,6 +38,100 @@ class _UserManagementPageState extends State<UserManagementPage>
     _loadAllUsers();
   }
 
+// เพิ่มฟังก์ชันนี้ในคลาส _UserManagementPageState
+  Future<Map<String, dynamic>> _getUserFinancialData(String userId) async {
+    try {
+      // ข้อมูลการเงินจากคอลเลกชัน wallets หรือ finances
+      DocumentSnapshot walletDoc = await FirebaseFirestore.instance
+          .collection('wallets')
+          .doc(userId)
+          .get();
+
+      // ถ้าไม่พบข้อมูลในคอลเลกชัน wallets ให้ดูในคอลเลกชัน finances (ถ้ามี)
+      if (!walletDoc.exists) {
+        walletDoc = await FirebaseFirestore.instance
+            .collection('finances')
+            .doc(userId)
+            .get();
+      }
+
+      // ถ้ามีข้อมูลการเงิน
+      if (walletDoc.exists) {
+        return walletDoc.data() as Map<String, dynamic>;
+      }
+
+      // ข้อมูลการจองที่เสร็จสิ้นสำหรับผู้รับเลี้ยง (เฉพาะสถานะ completed)
+      if (userId != null) {
+        double totalEarnings = 0;
+        int completedBookings = 0;
+
+        // สำหรับผู้รับเลี้ยง (sitter) - ดึงข้อมูลการจองที่เสร็จสิ้น
+        QuerySnapshot bookingsSnapshot = await FirebaseFirestore.instance
+            .collection('bookings')
+            .where('sitterId', isEqualTo: userId)
+            .where('status', isEqualTo: 'completed')
+            .get();
+
+        for (var doc in bookingsSnapshot.docs) {
+          Map<String, dynamic> bookingData = doc.data() as Map<String, dynamic>;
+          if (bookingData['totalPrice'] != null) {
+            double price = bookingData['totalPrice'] is int
+                ? (bookingData['totalPrice'] as int).toDouble()
+                : (bookingData['totalPrice'] as double);
+            totalEarnings += price;
+            completedBookings++;
+          }
+        }
+
+        // สำหรับผู้ใช้ทั่วไป (user) - ดึงข้อมูลการใช้จ่าย
+        QuerySnapshot userBookingsSnapshot = await FirebaseFirestore.instance
+            .collection('bookings')
+            .where('userId', isEqualTo: userId)
+            .get();
+
+        double totalSpending = 0;
+        int totalBookings = userBookingsSnapshot.size;
+
+        for (var doc in userBookingsSnapshot.docs) {
+          Map<String, dynamic> bookingData = doc.data() as Map<String, dynamic>;
+          if (bookingData['totalPrice'] != null) {
+            double price = bookingData['totalPrice'] is int
+                ? (bookingData['totalPrice'] as int).toDouble()
+                : (bookingData['totalPrice'] as double);
+            totalSpending += price;
+          }
+        }
+
+        return {
+          'balance': 0, // ไม่พบยอดเงินคงเหลือโดยตรง
+          'totalEarnings': totalEarnings,
+          'totalSpending': totalSpending,
+          'completedBookings': completedBookings,
+          'totalBookings': totalBookings,
+          'calculated': true // บอกว่าเป็นข้อมูลที่คำนวณได้ ไม่ใช่ข้อมูลโดยตรง
+        };
+      }
+
+      // ถ้าไม่พบข้อมูลการเงินใดๆ
+      return {
+        'balance': 0,
+        'totalEarnings': 0,
+        'totalSpending': 0,
+        'completedBookings': 0,
+        'totalBookings': 0,
+        'notFound': true
+      };
+    } catch (e) {
+      print('Error fetching financial data: $e');
+      return {
+        'error': e.toString(),
+        'balance': 0,
+        'totalEarnings': 0,
+        'totalSpending': 0
+      };
+    }
+  }
+
   Future<void> _deleteUser(String userId) async {
     try {
       // แสดงหน้าต่างยืนยันการลบ
@@ -514,7 +608,38 @@ class _UserManagementPageState extends State<UserManagementPage>
     }
   }
 
-  // สร้างไดอะล็อกแสดงรายละเอียดผู้ใช้
+// เพิ่มฟังก์ชันในคลาส _UserManagementPageState
+  Widget _buildFinancialItem(
+      String label, String value, IconData icon, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // แก้ไขฟังก์ชัน _buildUserDetailDialog
   Widget _buildUserDetailDialog(Map<String, dynamic> userData, String userId) {
     return AlertDialog(
       title: const Text('ข้อมูลผู้ใช้งาน'),
@@ -565,6 +690,152 @@ class _UserManagementPageState extends State<UserManagementPage>
               _buildDetailItem(
                   'เหตุผลที่ถูกปฏิเสธ', userData['rejectionReason']),
 
+            // เพิ่มส่วนแสดงข้อมูลการเงิน
+            SizedBox(height: 16),
+            Divider(),
+            SizedBox(height: 8),
+
+            // หัวข้อข้อมูลการเงิน
+            Row(
+              children: [
+                Icon(Icons.account_balance_wallet, color: Colors.deepOrange),
+                SizedBox(width: 8),
+                Text(
+                  'ข้อมูลการเงิน',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepOrange,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 12),
+
+            // แสดงข้อมูลการเงินโดยใช้ FutureBuilder
+            FutureBuilder<Map<String, dynamic>>(
+              future: _getUserFinancialData(userId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'เกิดข้อผิดพลาดในการโหลดข้อมูลการเงิน: ${snapshot.error}',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasData) {
+                  final financialData = snapshot.data!;
+
+                  // ถ้าไม่พบข้อมูลการเงิน
+                  if (financialData['notFound'] == true) {
+                    return Container(
+                      padding: EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'ไม่พบข้อมูลการเงินสำหรับผู้ใช้นี้',
+                        style: TextStyle(fontStyle: FontStyle.italic),
+                      ),
+                    );
+                  }
+
+                  // แสดงข้อมูลการเงิน
+                  return Column(
+                    children: [
+                      // ข้อมูลยอดเงินและรายได้
+                      Container(
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.green.shade200),
+                        ),
+                        child: Column(
+                          children: [
+                            if (userData['role'] == 'sitter') ...[
+                              _buildFinancialItem(
+                                'รายได้ทั้งหมด',
+                                '฿${NumberFormat('#,##0.00').format(financialData['totalEarnings'] ?? 0)}',
+                                Icons.monetization_on,
+                                Colors.green,
+                              ),
+                              SizedBox(height: 8),
+                              _buildFinancialItem(
+                                'งานที่เสร็จสมบูรณ์',
+                                '${financialData['completedBookings'] ?? 0} งาน',
+                                Icons.check_circle,
+                                Colors.blue,
+                              ),
+                            ],
+                            if (userData['role'] == 'user') ...[
+                              _buildFinancialItem(
+                                'ค่าใช้จ่ายทั้งหมด',
+                                '฿${NumberFormat('#,##0.00').format(financialData['totalSpending'] ?? 0)}',
+                                Icons.shopping_cart,
+                                Colors.orange,
+                              ),
+                              SizedBox(height: 8),
+                              _buildFinancialItem(
+                                'จำนวนการจองทั้งหมด',
+                                '${financialData['totalBookings'] ?? 0} ครั้ง',
+                                Icons.calendar_today,
+                                Colors.purple,
+                              ),
+                            ],
+                            if (userData['role'] == 'admin' ||
+                                financialData['balance'] != null) ...[
+                              SizedBox(height: 8),
+                              _buildFinancialItem(
+                                'ยอดเงินคงเหลือ',
+                                '฿${NumberFormat('#,##0.00').format(financialData['balance'] ?? 0)}',
+                                Icons.account_balance_wallet,
+                                Colors.indigo,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+
+                      // ข้อมูลระบบธุรกรรม (ถ้ามี)
+                      if (financialData['transactions'] != null) ...[
+                        SizedBox(height: 16),
+                        Text(
+                          'ประวัติธุรกรรมล่าสุด',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        // แสดงรายการธุรกรรม...
+                        // สามารถเพิ่มส่วนแสดงรายการธุรกรรมได้ตามต้องการ
+                      ],
+                    ],
+                  );
+                }
+
+                return Text('ไม่พบข้อมูล');
+              },
+            ),
+
             // ข้อมูลเพิ่มเติม
             if (userData['additionalInfo'] != null &&
                 userData['additionalInfo'].toString().isNotEmpty) ...[
@@ -589,7 +860,6 @@ class _UserManagementPageState extends State<UserManagementPage>
           ],
         ),
       ),
-      // ตำแหน่งที่ต้องแก้ไข: ในฟังก์ชัน _buildUserDetailDialog ส่วน actions:
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),

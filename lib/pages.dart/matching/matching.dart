@@ -610,7 +610,7 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
 
       // บันทึกข้อมูลลงใน Firestore
       DocumentReference bookingRef = await FirebaseFirestore.instance
-          .collection('booking_requests')
+          .collection('bookings') // เปลี่ยนจาก booking_requests เป็น bookings
           .add(bookingRequest);
 
       // แจ้งเตือนผู้ใช้ว่าบันทึกข้อมูลแล้ว
