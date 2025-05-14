@@ -628,7 +628,7 @@ class _BookingItemWidgetState extends State<BookingItemWidget> {
       case 'cancelled':
         return Colors.red;
       default:
-        return Colors.grey;
+        return Colors.green;
     }
   }
 
@@ -645,7 +645,7 @@ class _BookingItemWidgetState extends State<BookingItemWidget> {
       case 'cancelled':
         return 'ยกเลิก';
       default:
-        return 'ไม่ทราบสถานะ';
+        return 'กำลังดำเนินงาน';
     }
   }
 

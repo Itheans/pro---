@@ -1,9 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:myproject/Local_Noti/NotiClass.dart';
 
 class NotificationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
+  final NotifiationServices _localNotifications = NotifiationServices();
 
   // ส่งการแจ้งเตือนเมื่อสถานะการจองเปลี่ยนแปลง
   Future<void> sendBookingStatusNotification({
@@ -53,6 +57,13 @@ class NotificationService {
         }
       }
 
+      // เพิ่มการแจ้งเตือนภายในแอปด้วย
+      _localNotifications.sendCustomNotification(
+        title: _getNotificationTitle(status),
+        body: message,
+        payload: bookingId,
+      );
+
       print(
           'Notification sent successfully to user $userId about booking $bookingId');
     } catch (e) {
@@ -60,7 +71,7 @@ class NotificationService {
     }
   }
 
-  // ส่ง Push Notification
+  // แก้ไขฟังก์ชัน _sendPushNotification ให้ใช้ FCM HTTP v1 API ซึ่งเป็นวิธีที่แนะนำในปัจจุบัน
   Future<void> _sendPushNotification({
     required String token,
     required String title,
@@ -68,19 +79,41 @@ class NotificationService {
     required Map<String, dynamic> data,
   }) async {
     try {
-      // Convert dynamic map to String map
-      Map<String, String> stringData = data.map(
-        (key, value) => MapEntry(key, value.toString()),
+      // ควรใช้ Cloud Function หรือเซิร์ฟเวอร์ของคุณเองเพื่อส่ง FCM
+      // แต่เพื่อความเข้าใจง่าย เราจะแสดงวิธีใช้ HTTP API โดยตรง (ไม่แนะนำในโปรดักชัน)
+
+      // หมายเหตุ: คุณต้องใช้ server key จาก Firebase Console > Project Settings > Cloud Messaging
+      const serverKey = 'YOUR_SERVER_KEY'; // แทนที่ด้วย FCM server key ของคุณ
+
+      final url = Uri.parse('https://fcm.googleapis.com/fcm/send');
+
+      final headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'key=$serverKey',
+      };
+
+      final message = {
+        'notification': {
+          'title': title,
+          'body': body,
+          'sound': 'default',
+        },
+        'data': data,
+        'to': token,
+        'priority': 'high',
+      };
+
+      final response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(message),
       );
 
-      await _firebaseMessaging.sendMessage(
-        to: token,
-        data: stringData, // Use the converted map
-        messageId: DateTime.now().millisecondsSinceEpoch.toString(),
-        messageType: 'notification',
-        collapseKey: 'meow_sitter_app',
-        ttl: 24 * 60 * 60, // 1 day
-      );
+      if (response.statusCode == 200) {
+        print('FCM notification sent successfully');
+      } else {
+        print('Error sending FCM: ${response.statusCode} - ${response.body}');
+      }
     } catch (e) {
       print('Error sending push notification: $e');
     }
@@ -112,7 +145,7 @@ class NotificationService {
     }
   }
 
-  // ดึงรายการแจ้งเตือนทั้งหมดของผู้ใช้
+  // ฟังก์ชันเดิม...
   Stream<QuerySnapshot> getUserNotifications(String userId) {
     return _firestore
         .collection('users')
@@ -122,7 +155,6 @@ class NotificationService {
         .snapshots();
   }
 
-  // อัพเดตสถานะว่าอ่านแล้ว
   Future<void> markNotificationAsRead(
       String userId, String notificationId) async {
     try {
@@ -137,7 +169,6 @@ class NotificationService {
     }
   }
 
-  // ลบการแจ้งเตือน
   Future<void> deleteNotification(String userId, String notificationId) async {
     try {
       await _firestore

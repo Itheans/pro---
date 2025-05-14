@@ -366,7 +366,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
       case 'cancelled':
         return Colors.red;
       default:
-        return Colors.grey;
+        return Colors.green;
     }
   }
 
@@ -383,7 +383,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
       case 'cancelled':
         return 'ยกเลิก';
       default:
-        return 'ไม่ทราบสถานะ';
+        return 'กำลังดำเนินการ';
     }
   }
 
