@@ -113,3 +113,22 @@ class BookingCleanupService {
     }
   }
 }
+
+// ต่อท้ายเมธอด runCleanupTasks ที่มีอยู่แล้ว
+Future<void> _triggerFirebaseFunction() async {
+  try {
+    // สร้างหรืออัพเดตเอกสาร trigger ใน Firestore
+    await FirebaseFirestore.instance
+        .collection('triggers')
+        .doc('checkExpiredBookings')
+        .set({
+      'lastTriggered': FieldValue.serverTimestamp(),
+      'triggeredBy': 'app',
+      'automatic': true
+    });
+
+    print('Triggered Firebase Function via Firestore document update');
+  } catch (e) {
+    print('Error triggering Firebase Function: $e');
+  }
+}

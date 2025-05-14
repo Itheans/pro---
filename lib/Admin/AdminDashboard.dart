@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -14,7 +15,6 @@ import 'package:myproject/Admin/SitterIncomeReport.dart';
 import 'package:myproject/Admin/BatchBookingManagementPage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:myproject/pages.dart/login.dart';
-import 'package:http/http.dart' as http;
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({Key? key}) : super(key: key);
@@ -43,6 +43,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _adminEmail = "";
   String _adminPhoto = "";
   int _expiredBookingsCount = 0;
+  Timer? _checkExpiredBookingsTimer;
 
 // แก้ไขฟังก์ชัน initState ในคลาส _AdminDashboardState
   @override
@@ -51,6 +52,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _loadAdminInfo();
     _loadDashboardData();
 
+    // ตั้งเวลาให้ตรวจสอบคำขอหมดเวลาทุก 5 นาที
+    _checkExpiredBookingsTimer = Timer.periodic(Duration(minutes: 5), (timer) {
+      _checkExpiredBookingsInApp();
+    });
     // เพิ่มบรรทัดนี้เพื่อเริ่มต้น scheduled tasks
     ScheduledTasksManager().startScheduledTasks();
   }
@@ -58,7 +63,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
 // เพิ่มการหยุด scheduled tasks เมื่อออกจากหน้าจอ
   @override
   void dispose() {
-    ScheduledTasksManager().stopScheduledTasks();
+    // ยกเลิกตัวจับเวลาเมื่อออกจากหน้าจอ
+    _checkExpiredBookingsTimer?.cancel();
     super.dispose();
   }
 
@@ -198,33 +204,90 @@ class _AdminDashboardState extends State<AdminDashboard> {
         SnackBar(content: Text('กำลังตรวจสอบคำขอหมดเวลา กรุณารอสักครู่...')),
       );
 
-      // โหลดข้อมูลสรุปใหม่ แทนการเรียกใช้ Cloud Function โดยตรง
-      await _loadDashboardData();
-
-      // สร้าง Firebase Function ที่ใช้ Firestore Trigger แทน HTTP Trigger
-      // โดยอัพเดตเอกสารใน Firestore เพื่อกระตุ้นให้ function ทำงาน
+      // เรียกใช้ฟังก์ชัน HTTP โดยตรง
       try {
-        await FirebaseFirestore.instance
-            .collection('triggers')
-            .doc('checkExpiredBookings')
-            .set({
-          'lastTriggered': FieldValue.serverTimestamp(),
-          'triggeredBy': 'admin',
-          'manual': true
-        });
+        // ดึงคำขอที่มีสถานะ pending และหมดเวลาแล้ว
+        final now = DateTime.now();
+        final expiredBookingsSnapshot = await FirebaseFirestore.instance
+            .collection('bookings')
+            .where('status', isEqualTo: 'pending')
+            .where('expirationTime', isLessThan: Timestamp.fromDate(now))
+            .get();
+
+        print(
+            'พบคำขอที่หมดเวลา: ${expiredBookingsSnapshot.docs.length} รายการ');
+
+        // อัพเดตสถานะคำขอที่หมดเวลา
+        final batch = FirebaseFirestore.instance.batch();
+        final List<String> expiredBookingIds = [];
+
+        for (var doc in expiredBookingsSnapshot.docs) {
+          final bookingId = doc.id;
+          expiredBookingIds.add(bookingId);
+
+          // อัพเดตสถานะเป็น expired
+          batch.update(doc.reference, {
+            'status': 'expired',
+            'cancelReason': 'คำขอหมดเวลาอัตโนมัติหลังจาก 15 นาที',
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+
+          // สร้างการแจ้งเตือนให้แอดมิน
+          final adminNotifRef = FirebaseFirestore.instance
+              .collection('admin_notifications')
+              .doc();
+
+          batch.set(adminNotifRef, {
+            'title': 'คำขอการจองหมดเวลา',
+            'message':
+                'คำขอการจอง $bookingId ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ',
+            'type': 'booking_expired',
+            'bookingId': bookingId,
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
+
+          // เพิ่มการแจ้งเตือนให้กับผู้ใช้ด้วย
+          final userData = doc.data();
+          final userId = userData['userId'];
+          if (userId != null) {
+            final userNotifRef = FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .collection('notifications')
+                .doc();
+
+            batch.set(userNotifRef, {
+              'title': 'คำขอการจองหมดเวลา',
+              'message':
+                  'คำขอการจองของคุณได้หมดเวลาแล้ว กรุณาทำรายการใหม่อีกครั้ง',
+              'type': 'booking_expired',
+              'bookingId': bookingId,
+              'timestamp': FieldValue.serverTimestamp(),
+              'isRead': false,
+            });
+          }
+        }
+
+        // ดำเนินการตามการเปลี่ยนแปลงทั้งหมด
+        await batch.commit();
+
+        // โหลดข้อมูลใหม่
+        await _loadDashboardData();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('ส่งคำขอตรวจสอบการจองที่หมดเวลาสำเร็จ'),
+            content: Text(
+                'ตรวจสอบและอัพเดตคำขอหมดเวลาสำเร็จ: ${expiredBookingIds.length} รายการ'),
             backgroundColor: Colors.green,
           ),
         );
-      } catch (firestoreError) {
-        print('Error triggering function via Firestore: $firestoreError');
+      } catch (e) {
+        print('Error checking expired bookings: $e');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('เกิดข้อผิดพลาดในการส่งคำขอ: $firestoreError'),
-            backgroundColor: Colors.orange,
+            content: Text('เกิดข้อผิดพลาด: $e'),
+            backgroundColor: Colors.red,
           ),
         );
       }
