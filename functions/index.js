@@ -37,7 +37,7 @@ const checkExpiredBookingsLogic = async () => {
     // อัพเดตสถานะคำขอเป็น expired
     batch.update(doc.ref, {
       status: "expired",
-      cancelReason: "คำขอหมดเวลาอัตโนมัติหลังจาก 15 นาที",
+      cancelReason: "คำขอหมดเวลาอัตโนมัติหลังจาก 1 นาที",
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     
@@ -80,22 +80,18 @@ const checkExpiredBookingsLogic = async () => {
     
     // สร้างการแจ้งเตือนให้แอดมิน
     const adminNotification = {
-  title: "คำขอการจองหมดเวลา",
-  message: `คำขอการจอง ${bookingId} ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ`,
-  type: "booking_expired",
-  bookingId: bookingId,
-  timestamp: admin.firestore.FieldValue.serverTimestamp(),
-  isRead: false,
-};
-
-console.log("Creating admin notification:", adminNotification);
-
-const adminNotifRef = admin.firestore()
-    .collection("admin_notifications")
-    .doc();
-batch.set(adminNotifRef, adminNotification);
-
-
+      title: "คำขอการจองหมดเวลา",
+      message: `คำขอการจอง ${bookingId} ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ`,
+      type: "booking_expired",
+      bookingId: bookingId,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      isRead: false,
+    };
+    
+    const adminNotifRef = admin.firestore()
+        .collection("admin_notifications")
+        .doc();
+    batch.set(adminNotifRef, adminNotification);
     
     // ส่ง push notification (ถ้ามี FCM token)
     if (userId && sitterId) {
@@ -110,7 +106,10 @@ batch.set(adminNotifRef, adminNotification);
   }
   
   console.log("Successfully updated expired bookings");
-  return { success: true, processedCount: expiredRequestsSnapshot.size };
+  return { 
+    success: true, 
+    processedCount: expiredRequestsSnapshot.size 
+  };
 };
 
 // สร้างฟังก์ชัน HTTP สำหรับการทดสอบบน emulator
@@ -134,6 +133,7 @@ exports.checkExpiredBookings = functions.pubsub
  * @param {string} bookingId - ไอดีของการจอง
  * @return {Promise} Promise ของการส่งการแจ้งเตือน
  */
+// แก้ไขฟังก์ชัน sendPushNotifications โดยลบโค้ดที่ผิดพลาด
 async function sendPushNotifications(userId, sitterId, bookingId) {
   try {
     // ตรวจสอบว่ามีค่า userId และ sitterId หรือไม่
@@ -197,12 +197,7 @@ async function sendPushNotifications(userId, sitterId, bookingId) {
           },
         });
         console.log("Sent notification to sitter", sitterId);
-        console.log("Successfully updated all expired bookings. Found:", expiredRequestsSnapshot.size);
-return { 
-  success: true, 
-  processedCount: expiredRequestsSnapshot.size,
-  message: "Successfully processed all expired booking requests." 
-};
+        // ลบโค้ดที่มีปัญหา ไม่ต้องมีการส่งค่ากลับในฟังก์ชันนี้
       } catch (err) {
         console.error("Failed to send notification to sitter:", err);
       }
@@ -210,17 +205,39 @@ return {
   } catch (error) {
     console.error("Error in sendPushNotifications:", error);
   }
-}
-// ใช้ Firestore trigger แทน HTTP trigger
+}ห
+// แก้ไขฟังก์ชัน Firestore Trigger
 exports.checkExpiredBookingsByFirestore = functions.firestore
   .document('triggers/checkExpiredBookings')
   .onWrite(async (change, context) => {
     try {
-      console.log("Firestore trigger activated");
-      await checkExpiredBookingsLogic();
+      console.log("Firestore trigger activated for expired bookings check");
+      const result = await checkExpiredBookingsLogic();
+      console.log("Expired bookings check completed:", result);
+      
+      // อัพเดตเอกสาร trigger เพื่อบันทึกผลลัพธ์
+      await admin.firestore()
+        .collection('triggers')
+        .doc('checkExpiredBookings')
+        .update({
+          lastRun: admin.firestore.FieldValue.serverTimestamp(),
+          lastResult: result,
+          processedCount: result.processedCount
+        });
+      
       return null;
     } catch (error) {
       console.error("Error checking expired bookings:", error);
+      
+      // บันทึกข้อผิดพลาด
+      await admin.firestore()
+        .collection('triggers')
+        .doc('checkExpiredBookings')
+        .update({
+          lastRun: admin.firestore.FieldValue.serverTimestamp(),
+          lastError: error.message
+        });
+      
       return null;
     }
   });

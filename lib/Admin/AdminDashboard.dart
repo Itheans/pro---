@@ -187,7 +187,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  // เพิ่มเมธอดนี้ในคลาส _AdminDashboardState
+  // แก้ไขเมธอด _checkExpiredBookingsManually
   Future<void> _checkExpiredBookingsManually() async {
     try {
       setState(() {
@@ -199,12 +199,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         SnackBar(content: Text('กำลังตรวจสอบคำขอหมดเวลา กรุณารอสักครู่...')),
       );
 
-      // โหลดข้อมูลสรุปใหม่ แทนการเรียกใช้ Cloud Function โดยตรง
-      await _loadDashboardData();
-
-      // สร้าง Firebase Function ที่ใช้ Firestore Trigger แทน HTTP Trigger
-      // โดยอัพเดตเอกสารใน Firestore เพื่อกระตุ้นให้ function ทำงาน
       try {
+        // กระตุ้น Cloud Function ผ่าน Firestore Trigger
         await FirebaseFirestore.instance
             .collection('triggers')
             .doc('checkExpiredBookings')
@@ -214,9 +210,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
           'manual': true
         });
 
+        // รอให้ Cloud Function ทำงานเสร็จ
+        await Future.delayed(Duration(seconds: 3));
+
+        // โหลดข้อมูลใหม่
+        await _loadDashboardData();
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('ส่งคำขอตรวจสอบการจองที่หมดเวลาสำเร็จ'),
+            content: Text('ตรวจสอบและอัพเดตคำขอหมดเวลาเรียบร้อยแล้ว'),
             backgroundColor: Colors.green,
           ),
         );
