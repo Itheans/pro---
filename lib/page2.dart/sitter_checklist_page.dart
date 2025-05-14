@@ -12,7 +12,7 @@ class SitterChecklistPage extends StatefulWidget {
 
   const SitterChecklistPage({
     Key? key,
-    required this.bookingId,
+    required this.bookingId, // ตรวจสอบว่ามีการส่ง bookingId มาจริง
   }) : super(key: key);
 
   @override
@@ -26,25 +26,33 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
   List<Map<String, dynamic>> _cats = [];
   List<ChecklistItem> _checklistItems = [];
   String? _selectedCatId;
-  
+
   @override
   void initState() {
     super.initState();
     _loadData();
   }
-  
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
     });
-    
+
     try {
+      print(
+          "Loading data for booking ID: ${widget.bookingId}"); // เพิ่มการพิมพ์เพื่อตรวจสอบ
+
       // โหลดข้อมูลแมวสำหรับการจอง
-      List<Map<String, dynamic>> cats = await _checklistService.getCatsForBooking(widget.bookingId);
-      
+      List<Map<String, dynamic>> cats =
+          await _checklistService.getCatsForBooking(widget.bookingId);
+      print("Cats found: ${cats.length}"); // เพิ่มการพิมพ์เพื่อตรวจสอบ
+
       // โหลดเช็คลิสต์สำหรับการจอง
-      List<ChecklistItem> checklistItems = await _checklistService.getChecklistByBooking(widget.bookingId);
-      
+      List<ChecklistItem> checklistItems =
+          await _checklistService.getChecklistByBooking(widget.bookingId);
+      print(
+          "Checklist items found: ${checklistItems.length}"); // เพิ่มการพิมพ์เพื่อตรวจสอบ
+
       setState(() {
         _cats = cats;
         _checklistItems = checklistItems;
@@ -63,31 +71,77 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
       );
     }
   }
-  
+
+// เพิ่มเมธอดนี้ในคลาส _SitterChecklistPageState
+  Future<void> _createDefaultChecklist() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // ดึงข้อมูลการจอง
+      DocumentSnapshot bookingDoc = await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .get();
+
+      if (bookingDoc.exists) {
+        Map<String, dynamic> bookingData =
+            bookingDoc.data() as Map<String, dynamic>;
+
+        // สร้างเช็คลิสต์
+        await _checklistService.createDefaultChecklist(
+          widget.bookingId,
+          bookingData['userId'],
+          bookingData['sitterId'],
+          List<String>.from(bookingData['catIds']),
+        );
+
+        // โหลดข้อมูลใหม่
+        await _loadData();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('สร้างเช็คลิสต์เรียบร้อย')),
+        );
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('ไม่พบข้อมูลการจอง')),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      print('Error creating checklist: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาดในการสร้างเช็คลิสต์: $e')),
+      );
+    }
+  }
+
   Future<void> _pickImageAndUpdateChecklist(ChecklistItem item) async {
     try {
       final XFile? image = await _picker.pickImage(source: ImageSource.camera);
       if (image == null) return;
-      
+
       // แสดงป๊อปอัพให้กรอกโน้ต
       String? note = await _showNoteDialog();
       if (note == null) return;
-      
+
       setState(() {
         _isLoading = true;
       });
-      
+
       // อัปโหลดรูปภาพและอัปเดตเช็คลิสต์
       await _checklistService.uploadImageAndUpdateChecklist(
-        item.id, 
-        File(image.path), 
-        note, 
-        true
-      );
-      
+          item.id, File(image.path), note, true);
+
       // โหลดข้อมูลใหม่
       await _loadData();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('อัปเดตเช็คลิสต์เรียบร้อยแล้ว')),
       );
@@ -101,10 +155,10 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
       });
     }
   }
-  
+
   Future<String?> _showNoteDialog() async {
     TextEditingController noteController = TextEditingController();
-    
+
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -133,7 +187,7 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
       ),
     );
   }
-  
+
   void _updateChecklistStatus(ChecklistItem item, bool isCompleted) async {
     try {
       if (isCompleted) {
@@ -151,41 +205,81 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
       );
     }
   }
-  
+
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('เช็คลิสต์การดูแลแมว'),
-        backgroundColor: Colors.teal,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: _loadData,
-            tooltip: 'รีเฟรชข้อมูล',
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // ส่วนเลือกแมว
-                _buildCatSelector(),
-                
-                // ส่วนแสดงเช็คลิสต์
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Text('เช็คลิสต์การดูแลแมว'),
+      backgroundColor: Colors.teal,
+      actions: [
+        IconButton(
+          icon: Icon(Icons.refresh),
+          onPressed: _loadData,
+          tooltip: 'รีเฟรชข้อมูล',
+        ),
+      ],
+    ),
+    body: _isLoading
+        ? Center(child: CircularProgressIndicator())
+        : Column(
+            children: [
+              if (_cats.isEmpty || _checklistItems.isEmpty)
+                // กรณีไม่มีแมวหรือไม่มีเช็คลิสต์
                 Expanded(
-                  child: _selectedCatId != null
-                      ? _buildChecklistForCat(_selectedCatId!)
-                      : Center(
-                          child: Text('กรุณาเลือกแมว'),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 64,
+                          color: Colors.amber,
                         ),
+                        SizedBox(height: 16),
+                        Text(
+                          'ไม่พบข้อมูลเช็คลิสต์หรือแมว',
+                          style: TextStyle(fontSize: 18),
+                        ),
+                        SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            // สร้างเช็คลิสต์ใหม่
+                            _createDefaultChecklist();
+                          },
+                          icon: Icon(Icons.add),
+                          label: Text('สร้างเช็คลิสต์ใหม่'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.teal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Column(
+                  children: [
+                    // ส่วนเลือกแมว
+                    _buildCatSelector(),
+                    
+                    // ส่วนแสดงเช็คลิสต์
+                    Expanded(
+                      child: _selectedCatId != null
+                          ? _buildChecklistForCat(_selectedCatId!)
+                          : Center(
+                              child: Text('กรุณาเลือกแมว'),
+                            ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-    );
-  }
-  
+            ],
+          ),
+  );
+}
+
+
+
   Widget _buildCatSelector() {
     return Container(
       height: 100,
@@ -196,7 +290,7 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
         itemBuilder: (context, index) {
           final cat = _cats[index];
           final isSelected = cat['id'] == _selectedCatId;
-          
+
           return GestureDetector(
             onTap: () {
               setState(() {
@@ -218,9 +312,10 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
                 children: [
                   CircleAvatar(
                     radius: 25,
-                    backgroundImage: cat['imagePath'] != null && cat['imagePath'].isNotEmpty
-                        ? NetworkImage(cat['imagePath'])
-                        : null,
+                    backgroundImage:
+                        cat['imagePath'] != null && cat['imagePath'].isNotEmpty
+                            ? NetworkImage(cat['imagePath'])
+                            : null,
                     child: cat['imagePath'] == null || cat['imagePath'].isEmpty
                         ? Icon(Icons.pets, color: Colors.grey)
                         : null,
@@ -229,7 +324,8 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
                   Text(
                     cat['name'] ?? 'แมว',
                     style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -241,13 +337,12 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
       ),
     );
   }
-  
+
   Widget _buildChecklistForCat(String catId) {
     // กรองรายการเฉพาะแมวที่เลือก
-    List<ChecklistItem> filteredItems = _checklistItems
-        .where((item) => item.catId == catId)
-        .toList();
-    
+    List<ChecklistItem> filteredItems =
+        _checklistItems.where((item) => item.catId == catId).toList();
+
     if (filteredItems.isEmpty) {
       return Center(
         child: Column(
@@ -270,13 +365,13 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
         ),
       );
     }
-    
+
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: filteredItems.length,
       itemBuilder: (context, index) {
         final item = filteredItems[index];
-        
+
         return Card(
           margin: EdgeInsets.only(bottom: 12),
           shape: RoundedRectangleBorder(
@@ -302,16 +397,20 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: item.isCompleted ? Colors.green.shade100 : Colors.grey.shade100,
+                      color: item.isCompleted
+                          ? Colors.green.shade100
+                          : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(
-                      item.isCompleted ? Icons.check_circle : Icons.circle_outlined,
+                      item.isCompleted
+                          ? Icons.check_circle
+                          : Icons.circle_outlined,
                       color: item.isCompleted ? Colors.green : Colors.grey,
                     ),
                   ),
                   SizedBox(width: 16),
-                  
+
                   // รายละเอียดรายการ
                   Expanded(
                     child: Column(
@@ -322,11 +421,16 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            decoration: item.isCompleted ? TextDecoration.lineThrough : null,
-                            color: item.isCompleted ? Colors.grey : Colors.black,
+                            decoration: item.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                            color:
+                                item.isCompleted ? Colors.grey : Colors.black,
                           ),
                         ),
-                        if (item.isCompleted && item.note != null && item.note!.isNotEmpty)
+                        if (item.isCompleted &&
+                            item.note != null &&
+                            item.note!.isNotEmpty)
                           Padding(
                             padding: EdgeInsets.only(top: 4),
                             child: Text(
@@ -354,7 +458,7 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
                       ],
                     ),
                   ),
-                  
+
                   // ปุ่มกล้องหรือปุ่มแสดงรูป
                   if (item.isCompleted && item.imageUrl != null)
                     Container(
@@ -382,7 +486,7 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
       },
     );
   }
-  
+
   void _showCompletedItemDetails(ChecklistItem item) {
     showDialog(
       context: context,

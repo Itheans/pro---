@@ -68,9 +68,12 @@ class SharedPreferenceHelper {
     return prefs.getString(displaynameKey);
   }
 
+  // ตรวจสอบว่าฟังก์ชัน getUserRole ทำงานถูกต้อง
   Future<String?> getUserRole() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    return prefs.getString(roleKey);
+    String? role = prefs.getString(roleKey);
+    print('Current user role: $role'); // เพิ่ม log เพื่อตรวจสอบ
+    return role;
   }
 
   // Additional utility methods to check if data exists

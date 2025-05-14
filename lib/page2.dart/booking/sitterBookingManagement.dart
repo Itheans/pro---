@@ -6,6 +6,7 @@ import 'package:myproject/page2.dart/BookingAcceptancePage.dart';
 import 'package:myproject/page2.dart/ActiveBookingsPage.dart'; // นำเข้า ActiveBookingsPage จากไฟล์นี้เท่านั้น
 import 'package:myproject/page2.dart/scheduleincomepage.dart'; // นำเข้า ScheduleIncomePage อย่างถูกต้อง
 import 'package:myproject/page2.dart/sitter_checklist_page.dart';
+import 'package:myproject/services/checklist_service.dart';
 import 'package:myproject/widget/widget_support.dart';
 
 class SitterBookingManagement extends StatefulWidget {
@@ -71,6 +72,50 @@ class _SitterBookingManagementState extends State<SitterBookingManagement> {
     } catch (e) {
       print('Error loading summary data: $e');
       setState(() => _isLoading = false);
+    }
+  }
+
+// เมื่อการจองถูกยืนยัน
+  Future<void> confirmBooking(String bookingId) async {
+    try {
+      // อัปเดตสถานะการจอง
+      await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(bookingId)
+          .update({
+        'status': 'confirmed',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // ดึงข้อมูลการจอง
+      DocumentSnapshot bookingDoc = await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(bookingId)
+          .get();
+
+      if (bookingDoc.exists) {
+        Map<String, dynamic> bookingData =
+            bookingDoc.data() as Map<String, dynamic>;
+
+        // สร้างเช็คลิสต์
+        ChecklistService checklistService = ChecklistService();
+        await checklistService.createDefaultChecklist(
+          bookingId,
+          bookingData['userId'],
+          bookingData['sitterId'],
+          List<String>.from(bookingData['catIds']),
+        );
+      }
+
+      // แสดงข้อความสำเร็จ
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('ยืนยันการจองเรียบร้อยและสร้างเช็คลิสต์แล้ว')),
+      );
+    } catch (e) {
+      print('Error confirming booking: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+      );
     }
   }
 
@@ -243,14 +288,14 @@ class _SitterBookingManagementState extends State<SitterBookingManagement> {
         ),
         const SizedBox(height: 16),
 
-        // เพิ่มการ์ดเช็คลิสต์การดูแลแมว
+        // เพิ่มเมนูเช็คลิสต์การดูแลแมว
         _buildOptionCard(
           'เช็คลิสต์การดูแลแมว',
           'บันทึกกิจกรรมที่ทำและถ่ายรูปการดูแลแมว',
           Icons.checklist,
           Colors.purple,
           () {
-            // ดึงรายการการจองที่กำลังดำเนินการ
+            // ดึงรายการการจองที่กำลังดำเนินการหรือได้รับการยืนยันแล้ว
             FirebaseFirestore.instance
                 .collection('bookings')
                 .where('sitterId', isEqualTo: _auth.currentUser?.uid)
@@ -260,19 +305,32 @@ class _SitterBookingManagementState extends State<SitterBookingManagement> {
                 .get()
                 .then((snapshot) {
                   if (snapshot.docs.isNotEmpty) {
+                    String bookingId = snapshot.docs.first.id;
+                    print(
+                        "Navigating to checklist for booking: $bookingId"); // เพิ่มการพิมพ์เพื่อตรวจสอบ
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => SitterChecklistPage(
-                          bookingId: snapshot.docs.first.id,
+                          bookingId: bookingId,
                         ),
                       ),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('ไม่พบการจองที่กำลังดำเนินการ')),
+                      SnackBar(
+                          content: Text(
+                              'ไม่พบการจองที่กำลังดำเนินการหรือยืนยันแล้ว')),
                     );
                   }
+                })
+                .catchError((error) {
+                  print(
+                      "Error finding bookings: $error"); // เพิ่มการพิมพ์ข้อผิดพลาด
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                        content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล: $error')),
+                  );
                 });
           },
         ),
