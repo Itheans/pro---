@@ -207,78 +207,79 @@ class _SitterChecklistPageState extends State<SitterChecklistPage> {
   }
 
   @override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: Text('เช็คลิสต์การดูแลแมว'),
-      backgroundColor: Colors.teal,
-      actions: [
-        IconButton(
-          icon: Icon(Icons.refresh),
-          onPressed: _loadData,
-          tooltip: 'รีเฟรชข้อมูล',
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('เช็คลิสต์การดูแลแมว'),
+        backgroundColor: Colors.teal,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadData,
+            tooltip: 'รีเฟรชข้อมูล',
+          ),
+        ],
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : _buildBodyContent(), // แยกเป็นฟังก์ชันใหม่
+    );
+  }
+
+  Widget _buildBodyContent() {
+    // ตรวจสอบข้อมูลก่อนแสดงผล
+    if (_cats.isEmpty || _checklistItems.isEmpty) {
+      return _buildEmptyContent();
+    } else {
+      return _buildChecklistContent();
+    }
+  }
+
+// สร้างฟังก์ชันแยกเพื่อแสดงเนื้อหาเมื่อไม่มีข้อมูล
+  Widget _buildEmptyContent() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            size: 64,
+            color: Colors.amber,
+          ),
+          SizedBox(height: 16),
+          Text(
+            'ไม่พบข้อมูลเช็คลิสต์หรือแมว',
+            style: TextStyle(fontSize: 18),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _createDefaultChecklist,
+            icon: Icon(Icons.add),
+            label: Text('สร้างเช็คลิสต์ใหม่'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.teal,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// สร้างฟังก์ชันแยกเพื่อแสดงเนื้อหาเมื่อมีข้อมูล
+  Widget _buildChecklistContent() {
+    return Column(
+      children: [
+        _buildCatSelector(),
+        Expanded(
+          child: _selectedCatId != null
+              ? _buildChecklistForCat(_selectedCatId!)
+              : Center(
+                  child: Text('กรุณาเลือกแมว'),
+                ),
         ),
       ],
-    ),
-    body: _isLoading
-        ? Center(child: CircularProgressIndicator())
-        : Column(
-            children: [
-              if (_cats.isEmpty || _checklistItems.isEmpty)
-                // กรณีไม่มีแมวหรือไม่มีเช็คลิสต์
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          size: 64,
-                          color: Colors.amber,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'ไม่พบข้อมูลเช็คลิสต์หรือแมว',
-                          style: TextStyle(fontSize: 18),
-                        ),
-                        SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            // สร้างเช็คลิสต์ใหม่
-                            _createDefaultChecklist();
-                          },
-                          icon: Icon(Icons.add),
-                          label: Text('สร้างเช็คลิสต์ใหม่'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.teal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              else
-                Column(
-                  children: [
-                    // ส่วนเลือกแมว
-                    _buildCatSelector(),
-                    
-                    // ส่วนแสดงเช็คลิสต์
-                    Expanded(
-                      child: _selectedCatId != null
-                          ? _buildChecklistForCat(_selectedCatId!)
-                          : Center(
-                              child: Text('กรุณาเลือกแมว'),
-                            ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-  );
-}
-
-
+    );
+  }
 
   Widget _buildCatSelector() {
     return Container(

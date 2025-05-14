@@ -24,8 +24,8 @@ class ChecklistService {
             .toList());
   }
 
-  // สร้างรายการเช็คลิสต์พื้นฐานเมื่อยืนยันการจอง
-  Future<void> createDefaultChecklist(String bookingId, String userId,
+// สร้างรายการเช็คลิสต์พื้นฐานเมื่อยืนยันการจอง
+  Future<bool> createDefaultChecklist(String bookingId, String userId,
       String sitterId, List<String> catIds) async {
     try {
       print('Creating default checklist for booking: $bookingId');
@@ -34,12 +34,24 @@ class ChecklistService {
 
       if (bookingId.isEmpty || userId.isEmpty || sitterId.isEmpty) {
         print('Error: Required parameters are empty');
-        return;
+        return false;
       }
 
       if (catIds.isEmpty) {
         print('Error: No cats found for this booking');
-        return;
+        return false;
+      }
+
+      // ตรวจสอบว่ามีเช็คลิสต์อยู่แล้วหรือไม่
+      QuerySnapshot existingChecklist = await _firestore
+          .collection('checklists')
+          .where('bookingId', isEqualTo: bookingId)
+          .limit(1)
+          .get();
+
+      if (existingChecklist.docs.isNotEmpty) {
+        print('Checklist already exists for this booking');
+        return true; // ถือว่าสร้างสำเร็จเนื่องจากมีอยู่แล้ว
       }
 
       // รายการกิจกรรมมาตรฐานที่ต้องทำ
@@ -53,6 +65,7 @@ class ChecklistService {
       ];
 
       // สร้างเช็คลิสต์สำหรับแมวแต่ละตัว
+      int successCount = 0;
       for (String catId in catIds) {
         for (String activity in standardActivities) {
           String id = Uuid().v4();
@@ -67,46 +80,96 @@ class ChecklistService {
             isCompleted: false,
           );
 
-          await _firestore.collection('checklists').doc(id).set(item.toJson());
-          print('Created checklist item: $activity for cat: $catId');
+          try {
+            await _firestore
+                .collection('checklists')
+                .doc(id)
+                .set(item.toJson());
+            successCount++;
+            print('Created checklist item: $activity for cat: $catId');
+          } catch (itemError) {
+            print(
+                'Error creating item: $activity for cat: $catId - $itemError');
+          }
         }
       }
 
-      print('Successfully created all checklist items');
+      print('Successfully created $successCount checklist items');
+      return successCount > 0; // ส่งคืนค่า true ถ้าสร้างอย่างน้อย 1 รายการ
     } catch (e) {
       print('Error creating default checklist: $e');
-      throw e;
+      return false;
     }
   }
 
-  // อัปโหลดรูปภาพและอัปเดตเช็คลิสต์
   Future<String?> uploadImageAndUpdateChecklist(
       String checklistId, File imageFile, String note, bool isCompleted) async {
     try {
       print('Uploading image and updating checklist ID: $checklistId');
+
+      // ตรวจสอบว่า checklistId ไม่ว่างเปล่า
+      if (checklistId.isEmpty) {
+        print('Error: checklistId is empty');
+        return null;
+      }
+
+      // ตรวจสอบว่าไฟล์มีอยู่จริง
+      if (!imageFile.existsSync()) {
+        print('Error: Image file does not exist');
+        return null;
+      }
 
       // อัปโหลดรูปภาพไปที่ Firebase Storage
       String fileName =
           'checklist_${DateTime.now().millisecondsSinceEpoch}.jpg';
       Reference storageRef = _storage.ref().child('checklist_images/$fileName');
 
-      await storageRef.putFile(imageFile);
-      String downloadUrl = await storageRef.getDownloadURL();
-      print('Image uploaded successfully: $downloadUrl');
+      // แก้ตรงนี้: เพิ่มการจัดการ error ในการอัปโหลดไฟล์
+      try {
+        await storageRef.putFile(imageFile);
+        String downloadUrl = await storageRef.getDownloadURL();
+        print('Image uploaded successfully: $downloadUrl');
 
-      // อัปเดตเช็คลิสต์ใน Firestore
-      await _firestore.collection('checklists').doc(checklistId).update({
-        'imageUrl': downloadUrl,
-        'note': note,
-        'isCompleted': isCompleted,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-      print('Checklist updated successfully');
+        // อัปเดตเช็คลิสต์ใน Firestore
+        await _firestore.collection('checklists').doc(checklistId).update({
+          'imageUrl': downloadUrl,
+          'note': note,
+          'isCompleted': isCompleted,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        print('Checklist updated successfully');
 
-      return downloadUrl;
+        return downloadUrl;
+      } catch (uploadError) {
+        print('Error during file upload: $uploadError');
+
+        // ถ้าการอัปโหลดรูปล้มเหลว แต่ยังต้องการอัปเดตสถานะเช็คลิสต์
+        await _firestore.collection('checklists').doc(checklistId).update({
+          'note': note,
+          'isCompleted': isCompleted,
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+        print('Checklist updated without image');
+
+        return null;
+      }
     } catch (e) {
       print('Error uploading image and updating checklist: $e');
       return null;
+    }
+  }
+
+// เพิ่มเมธอดใหม่ต่อท้ายคลาส ChecklistService
+  Future<bool> testFirestoreConnection() async {
+    try {
+      await _firestore.collection('test').doc('connection_test').set({
+        'timestamp': FieldValue.serverTimestamp(),
+        'message': 'Connection test successful'
+      });
+      return true;
+    } catch (e) {
+      print('Error connecting to Firestore: $e');
+      return false;
     }
   }
 
@@ -137,7 +200,7 @@ class ChecklistService {
     }
   }
 
-  // ดึงรายการเช็คลิสต์ตามการจอง
+  // ดึงข้อมูลเช็คลิสต์ตามการจอง
   Future<List<ChecklistItem>> getChecklistByBooking(String bookingId) async {
     try {
       print('Fetching checklist for booking: $bookingId');
@@ -158,7 +221,7 @@ class ChecklistService {
       if (snapshot.docs.isEmpty) {
         print(
             'No checklist items found for this booking, creating default items...');
-        // ถ้าไม่พบเช็คลิสต์ ให้โหลดข้อมูลการจองและสร้างเช็คลิสต์เริ่มต้น
+        // แก้ไขตรงนี้ - ตรวจสอบฟิลด์ catIds ให้ถูกต้อง
         try {
           DocumentSnapshot bookingDoc =
               await _firestore.collection('bookings').doc(bookingId).get();
@@ -168,25 +231,27 @@ class ChecklistService {
                 bookingDoc.data() as Map<String, dynamic>;
             String userId = bookingData['userId'] ?? '';
             String sitterId = bookingData['sitterId'] ?? '';
-            List<String> catIds =
-                List<String>.from(bookingData['catIds'] ?? []);
 
-            if (userId.isNotEmpty && sitterId.isNotEmpty && catIds.isNotEmpty) {
-              await createDefaultChecklist(bookingId, userId, sitterId, catIds);
+            // แก้ตรงนี้: ตรวจสอบชื่อฟิลด์ให้ถูกต้อง
+            List<String> catIds = [];
+            if (bookingData.containsKey('catIds') &&
+                bookingData['catIds'] != null) {
+              catIds = List<String>.from(bookingData['catIds']);
+            } else if (bookingData.containsKey('cats') &&
+                bookingData['cats'] != null) {
+              // เพิ่มการตรวจสอบกรณีที่ชื่อฟิลด์เป็น 'cats' แทน 'catIds'
+              catIds = List<String>.from(bookingData['cats']);
+            }
 
-              // โหลดข้อมูลใหม่หลังจากสร้างเช็คลิสต์เริ่มต้น
-              snapshot = await _firestore
-                  .collection('checklists')
-                  .where('bookingId', isEqualTo: bookingId)
-                  .orderBy('timestamp', descending: true)
-                  .get();
-
-              print(
-                  'Created and loaded ${snapshot.docs.length} new checklist items');
+            // Process checklist items for each cat
+            for (String catId in catIds) {
+              await createDefaultChecklistItems(
+                  bookingId, catId, userId, sitterId);
             }
           }
         } catch (e) {
-          print('Error creating default checklist: $e');
+          print('Error creating default checklist items: $e');
+          return []; // Return empty list on error
         }
       }
 
@@ -358,6 +423,68 @@ class ChecklistService {
         'bookingsWithChecklists': 0,
         'error': e.toString()
       };
+    }
+  }
+
+  Future<void> createDefaultChecklistItems(
+    String bookingId,
+    String catId,
+    String userId,
+    String sitterId,
+  ) async {
+    try {
+      // Define default checklist items
+      final defaultItems = [
+        {
+          'title': 'ตรวจสอบอาหารและน้ำ',
+          'description': 'เติมอาหารและน้ำให้เพียงพอ ทำความสะอาดภาชนะ',
+          'isCompleted': false,
+          'order': 1,
+          'catId': catId,
+          'bookingId': bookingId,
+          'userId': userId,
+          'sitterId': sitterId,
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+        {
+          'title': 'ทำความสะอาดกรงทราย',
+          'description': 'ตักทรายแมวที่ใช้แล้ว เติมทรายแมวใหม่ถ้าจำเป็น',
+          'isCompleted': false,
+          'order': 2,
+          'catId': catId,
+          'bookingId': bookingId,
+          'userId': userId,
+          'sitterId': sitterId,
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+        {
+          'title': 'เล่นกับแมว',
+          'description':
+              'ใช้เวลาอย่างน้อย 15 นาทีในการเล่นและมีปฏิสัมพันธ์กับแมว',
+          'isCompleted': false,
+          'order': 3,
+          'catId': catId,
+          'bookingId': bookingId,
+          'userId': userId,
+          'sitterId': sitterId,
+          'createdAt': FieldValue.serverTimestamp(),
+        }
+      ];
+
+      // Use batch write for better performance
+      final batch = _firestore.batch();
+
+      for (var item in defaultItems) {
+        final docRef =
+            _firestore.collection('checklists').doc(); // Auto-generate ID
+        batch.set(docRef, item);
+      }
+
+      await batch.commit();
+      print('Created default checklist items for cat: $catId');
+    } catch (e) {
+      print('Error creating default checklist items: $e');
+      throw Exception('Failed to create default checklist items: $e');
     }
   }
 }
