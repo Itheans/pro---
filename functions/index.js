@@ -3,6 +3,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 admin.initializeApp();
 
+
 console.log("Environment:", process.env.NODE_ENV || "production");
 console.log("Firebase Functions initialized");
 
@@ -38,11 +39,8 @@ pendingBookingsSnapshot.forEach(doc => {
 console.log(`Found ${expiredRequests.length} expired requests`);
   
   const batch = admin.firestore().batch();
-<<<<<<< HEAD
-=======
   const promises = [];
   const deletedBookings = [];
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
   
   expiredRequestsSnapshot.forEach((doc) => {
     const bookingId = doc.id;
@@ -64,25 +62,6 @@ console.log(`Found ${expiredRequests.length} expired requests`);
     batch.delete(doc.ref);
     
     // สร้างการแจ้งเตือนให้ผู้ใช้
-<<<<<<< HEAD
-    if (userId) {
-      const userNotification = {
-        title: "คำขอการจองหมดเวลา",
-        message: "คำขอการจองของคุณได้หมดเวลาแล้ว กรุณาทำรายการใหม่อีกครั้ง",
-        type: "booking_expired",
-        bookingId: bookingId,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        isRead: false,
-      };
-      
-      const userNotifRef = admin.firestore()
-          .collection("users")
-          .doc(userId)
-          .collection("notifications")
-          .doc();
-      batch.set(userNotifRef, userNotification);
-    }
-=======
     const userNotification = {
       title: "คำขอการจองหมดเวลาและถูกลบแล้ว",
       message: "คำขอการจองของคุณได้หมดเวลาและถูกลบออกจากระบบ กรุณาทำรายการใหม่อีกครั้ง",
@@ -91,6 +70,19 @@ console.log(`Found ${expiredRequests.length} expired requests`);
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       isRead: false,
     };
+    // เพิ่มการแจ้งเตือนในระบบหลักเมื่อคำขอหมดเวลา
+// เพิ่มการแจ้งเตือนเมื่อคำขอหมดเวลา
+const mainNotification = {
+  title: "คำขอหมดอายุ",
+  message: bookingId,
+  timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  isRead: false,
+};
+
+const mainNotifRef = admin.firestore()
+    .collection("notifications")
+    .doc();
+batch.set(mainNotifRef, mainNotification);
     
     // เพิ่มการแจ้งเตือนใน batch
     const userNotifRef = admin.firestore()
@@ -99,10 +91,9 @@ console.log(`Found ${expiredRequests.length} expired requests`);
         .collection("notifications")
         .doc();
     batch.set(userNotifRef, userNotification);
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
     
-    // สร้างการแจ้งเตือนให้ผู้รับเลี้ยง
     if (sitterId) {
+      // สร้างการแจ้งเตือนให้ผู้รับเลี้ยง
       const sitterNotification = {
         title: "คำขอการจองหมดเวลาและถูกลบแล้ว",
         message: "คำขอการจองได้หมดเวลาและถูกลบออกจากระบบ",
@@ -122,38 +113,23 @@ console.log(`Found ${expiredRequests.length} expired requests`);
     
     // สร้างการแจ้งเตือนให้แอดมิน
     const adminNotification = {
-<<<<<<< HEAD
-      title: "คำขอการจองหมดเวลา",
-      message: `คำขอการจอง ${bookingId} ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ`,
-      type: "booking_expired",
-=======
       title: "คำขอการจองหมดเวลาและถูกลบแล้ว",
       message: `คำขอการจอง ${bookingId} ได้หมดเวลาและถูกลบออกจากระบบโดยอัตโนมัติ`,
       type: "booking_deleted",
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
       bookingId: bookingId,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       isRead: false,
     };
-<<<<<<< HEAD
-
-    console.log("Creating admin notification:", adminNotification);
-
-=======
     
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
     const adminNotifRef = admin.firestore()
         .collection("admin_notifications")
         .doc();
     batch.set(adminNotifRef, adminNotification);
-<<<<<<< HEAD
-=======
     
     // ส่ง push notification (ถ้ามี FCM token)
     if (userId && sitterId) {
       promises.push(sendPushNotifications(userId, sitterId, bookingId));
     }
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
   });
   
   // เพิ่มประวัติการลบลงในคอลเลคชัน deleted_bookings
@@ -165,28 +141,11 @@ console.log(`Found ${expiredRequests.length} expired requests`);
   }
   
   // ดำเนินการทั้งหมดพร้อมกัน
-  if (expiredRequestsSnapshot.size > 0) {
-    await batch.commit();
-    console.log("Successfully updated expired bookings");
-  } else {
-    console.log("No expired bookings to update");
+  await batch.commit();
+  if (promises.length > 0) {
+    await Promise.all(promises);
   }
   
-<<<<<<< HEAD
-  return { 
-    success: true, 
-    processedCount: expiredRequestsSnapshot.size,
-    message: `Successfully processed ${expiredRequestsSnapshot.size} expired booking requests.`
-  };
-};
-
-// เหลือเฉพาะ HTTP function อย่างเดียว
-exports.checkExpiredBookingsHttp = functions.https.onRequest(async (req, res) => {
-  try {
-    console.log("HTTP request for expired bookings check...");
-    const result = await checkExpiredBookingsLogic();
-    res.status(200).json(result);
-=======
   console.log(`Successfully deleted ${deletedBookings.length} expired bookings`);
   return { 
     success: true, 
@@ -259,7 +218,7 @@ exports.watchNewBookings = functions.firestore
         
         // ถ้าไม่มี ให้ตั้งเวลาหมดอายุเป็น 15 นาทีจากปัจจุบัน
         const expirationTime = admin.firestore.Timestamp.fromDate(
-          new Date(Date.now() + 15 * 60 * 1000) // 15 นาที
+          new Date(Date.now() + 1 * 60 * 1000) // 15 นาที
         );
         
         await snapshot.ref.update({
@@ -302,7 +261,8 @@ exports.watchNewBookings = functions.firestore
   });
 // สร้างฟังก์ชัน HTTP สำหรับการทดสอบบน emulator
 exports.checkExpiredBookings = functions.pubsub
-  .schedule('every 1 minutes')
+  .schedule('every 20 seconds')
+  .timeZone('Asia/Bangkok') // ตั้งเวลาเป็นเขตเวลาของประเทศไทย
   .onRun(async (context) => {
     try {
       console.log("Starting expired bookings check...");
@@ -388,14 +348,9 @@ async function sendPushNotifications(userId, sitterId, bookingId) {
         console.error("Failed to send notification to sitter:", err);
       }
     }
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
   } catch (error) {
-    console.error("Error checking expired bookings:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error in sendPushNotifications:", error);
   }
-<<<<<<< HEAD
-});
-=======
 }
 // แก้ไขฟังก์ชัน Firestore Trigger
 exports.checkExpiredBookingsByFirestore = functions.firestore
@@ -432,16 +387,31 @@ exports.checkExpiredBookingsByFirestore = functions.firestore
       return null;
     }
   });
->>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
 
-// อีกหนึ่ง HTTP function สำหรับเรียกใช้จากแอพโดยตรง
-exports.checkExpiredBookings = functions.https.onRequest(async (req, res) => {
+  // เพิ่มฟังก์ชันใหม่
+exports.initializeBookingTriggers = functions.https.onRequest(async (req, res) => {
   try {
-    console.log("HTTP request for expired bookings check...");
-    const result = await checkExpiredBookingsLogic();
-    res.status(200).json(result);
+    // ตรวจสอบว่าเอกสารมีอยู่แล้วหรือไม่
+    const triggerDoc = await admin.firestore()
+      .collection('triggers')
+      .doc('checkExpiredBookings')
+      .get();
+      
+    if (!triggerDoc.exists) {
+      // ถ้ายังไม่มีเอกสาร ให้สร้างใหม่
+      await admin.firestore()
+        .collection('triggers')
+        .doc('checkExpiredBookings')
+        .set({
+          lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
+          initialized: true
+        });
+      console.log("Created initial trigger document");
+    }
+    
+    res.status(200).send("Booking triggers initialized successfully");
   } catch (error) {
-    console.error("Error checking expired bookings:", error);
-    res.status(500).json({ error: error.message });
+    console.error("Error initializing booking triggers:", error);
+    res.status(500).send("Error initializing booking triggers: " + error.message);
   }
 });

@@ -7,9 +7,10 @@ class BookingService {
   final NotificationService _notificationService = NotificationService();
 
   // ฟังก์ชันตรวจสอบคำขอที่หมดเวลา (เรียกใช้จาก background task หรือ Cloud Function)
+  // ฟังก์ชัน checkExpiredBookings() ประมาณบรรทัด 10-25
+// ปรับแต่งส่วนที่ตรวจสอบการหมดเวลาและส่งการแจ้งเตือน
   Future<void> checkExpiredBookings() async {
     try {
-      // ดึงคำขอที่มีสถานะ 'pending' และยังไม่ถูกยกเลิก
       final pendingBookings = await _firestore
           .collection('bookings')
           .where('status', isEqualTo: 'pending')
@@ -19,38 +20,49 @@ class BookingService {
 
       for (var booking in pendingBookings.docs) {
         final data = booking.data();
-        final expirationTime = data['expirationTime'] as Timestamp;
-        final userId = data['userId'] as String;
-        final sitterId = data['sitterId'] as String;
 
-        // ตรวจสอบว่าหมดเวลาหรือยัง
+        if (!data.containsKey('expirationTime')) continue;
+
+        final expirationTime = data['expirationTime'] as Timestamp;
+        final bookingId = booking.id;
+
         if (now.isAfter(expirationTime.toDate())) {
-          // อัพเดทสถานะเป็น 'auto_cancelled'
+          // อัพเดทสถานะเป็น 'expired'
           await booking.reference.update({
-            'status': 'auto_cancelled',
+            'status': 'expired',
             'cancelledAt': FieldValue.serverTimestamp(),
-            'cancelReason': 'คำขอหมดเวลา (15 นาที)'
+            'cancelReason': 'คำขอหมดเวลา (1 นาที)'
           });
 
-          // แจ้งเตือนเจ้าของแมว
-          await _notificationService.sendBookingStatusNotification(
-            userId: userId,
-            bookingId: booking.id,
-            status: 'auto_cancelled',
-            message: 'คำขอรับเลี้ยงของคุณหมดเวลาแล้ว',
-          );
-
-          // แจ้งเตือน sitter
-          await _notificationService.sendBookingStatusNotification(
-            userId: sitterId,
-            bookingId: booking.id,
-            status: 'auto_cancelled',
-            message: 'คำขอรับเลี้ยงหมดเวลาแล้ว',
-          );
+          // เพิ่มการแจ้งเตือน
+          await _firestore.collection('notifications').add({
+            'title': 'คำขอหมดอายุ',
+            'message': bookingId,
+            'timestamp': FieldValue.serverTimestamp(),
+            'isRead': false
+          });
         }
       }
     } catch (e) {
       print('Error checking expired bookings: $e');
+    }
+  }
+
+// เพิ่มฟังก์ชันใหม่สำหรับส่งการแจ้งเตือนไปยัง admin
+  Future<void> _sendAdminNotification(String bookingId) async {
+    try {
+      // สร้างการแจ้งเตือนในคอลเล็กชัน admin_notifications
+      await _firestore.collection('admin_notifications').add({
+        'title': 'คำขอการจองหมดเวลา',
+        'message':
+            'คำขอการจอง $bookingId ได้หมดเวลาแล้วและถูกยกเลิกโดยอัตโนมัติ',
+        'type': 'booking_expired',
+        'bookingId': bookingId,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+    } catch (e) {
+      print('Error sending admin notification: $e');
     }
   }
 

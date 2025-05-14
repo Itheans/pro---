@@ -43,7 +43,7 @@ class _CheckStatusWrapperState extends State<CheckStatusWrapper> {
             .doc(doc.id)
             .update({
           'status': 'cancelled',
-          'cancelReason': 'ไม่พบข้อมูลผู้รับเลี้ยง',
+          'cancelReason': 'คำขอหมดเวลาอัตโนมัติหลังจาก 1 นาที',
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
