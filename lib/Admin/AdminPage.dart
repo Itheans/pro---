@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:myproject/Admin/ChecklistManagementPage.dart';
 import 'package:myproject/Admin/NotificationService.dart';
 import 'package:myproject/Admin/ServiceFeeManagementPage.dart';
 import 'package:myproject/Admin/SitterApprovalPage.dart';
@@ -17,14 +18,15 @@ class AdminPanel extends StatefulWidget {
 }
 
 class _AdminPanelState extends State<AdminPanel> {
-  // ตัวแปรเก็บข้อมูลสถิติ
+  // State variables
   int _pendingSittersCount = 0;
   int _approvedSittersCount = 0;
   int _totalUsersCount = 0;
   int _totalBookingsCount = 0;
-  bool _isLoading = true;
+  bool _isLoading = true; // Keep only one declaration
   String _adminName = "ผู้ดูแลระบบ";
   String _adminEmail = "";
+  Map<String, dynamic> _summaryData = {};
 
   @override
   void initState() {
@@ -549,7 +551,20 @@ class _AdminPanelState extends State<AdminPanel> {
                       ),
                     ),
                     SizedBox(height: 10),
-
+// เพิ่มปุ่มตรวจสอบเช็คลิสต์
+                    _buildOptionCard(
+                      'ตรวจสอบเช็คลิสต์',
+                      'ดูรายละเอียดการดูแลแมวจากเช็คลิสต์',
+                      Icons.checklist,
+                      Colors.teal,
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ChecklistManagementPage(),
+                        ),
+                      ).then((_) => _loadSummaryData()),
+                    ),
+                    const SizedBox(height: 16),
                     // จัดการผู้ใช้ทั้งหมด
                     Card(
                       elevation: 3,
@@ -1251,6 +1266,129 @@ class _AdminPanelState extends State<AdminPanel> {
     } catch (e) {
       print('Error formatting dates: $e');
       return 'รูปแบบวันที่ไม่ถูกต้อง';
+    }
+  }
+
+  Widget _buildOptionCard(
+    String title,
+    String subtitle,
+    IconData icon,
+    Color color,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: color,
+                  size: 24,
+                ),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Colors.grey[400],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadSummaryData() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Get Firestore instance
+      final firestore = FirebaseFirestore.instance;
+
+      // Get total bookings count
+      final bookingsCount = await firestore
+          .collection('bookings')
+          .count()
+          .get()
+          .then((value) => value.count);
+
+      // Get completed checklists count
+      final completedChecklistsCount = await firestore
+          .collection('bookings')
+          .where('status', isEqualTo: 'completed')
+          .count()
+          .get()
+          .then((value) => value.count);
+
+      // Get pending reviews count
+      final pendingReviewsCount = await firestore
+          .collection('bookings')
+          .where('status', isEqualTo: 'completed')
+          .where('hasReview', isEqualTo: false)
+          .count()
+          .get()
+          .then((value) => value.count);
+
+      setState(() {
+        _summaryData = {
+          'totalBookings': bookingsCount,
+          'completedChecklists': completedChecklistsCount,
+          'pendingReviews': pendingReviewsCount,
+        };
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('Error loading summary data: $e');
+      setState(() {
+        _isLoading = false;
+      });
+
+      // Show error message to user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 }

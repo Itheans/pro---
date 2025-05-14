@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:myproject/Admin/AdminNotificationsPage%20.dart';
 import 'package:myproject/Admin/AdminSettingsPage.dart';
+import 'package:myproject/Admin/ChecklistManagementPage.dart';
+import 'package:myproject/Admin/DeletedBookingsPage.dart';
 import 'package:myproject/Admin/ScheduledTasksManager.dart';
 import 'package:myproject/Admin/ServiceFeeManagementPage.dart';
 import 'package:myproject/Admin/SitterVerificationPage.dart';
@@ -43,20 +45,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _adminEmail = "";
   String _adminPhoto = "";
   int _expiredBookingsCount = 0;
+<<<<<<< HEAD
   Timer? _checkExpiredBookingsTimer;
+=======
+  String _lastTriggeredTime = "ไม่มีข้อมูล";
+  int _processedBookingsCount = 0;
+>>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
 
 // แก้ไขฟังก์ชัน initState ในคลาส _AdminDashboardState
   @override
   void initState() {
     super.initState();
     _loadAdminInfo();
+    _ensureFirestoreTriggersExist(); // เพิ่มบรรทัดนี้
     _loadDashboardData();
 
+<<<<<<< HEAD
     // ตั้งเวลาให้ตรวจสอบคำขอหมดเวลาทุก 5 นาที
     _checkExpiredBookingsTimer = Timer.periodic(Duration(minutes: 5), (timer) {
       _checkExpiredBookingsInApp();
     });
     // เพิ่มบรรทัดนี้เพื่อเริ่มต้น scheduled tasks
+=======
+    // เริ่มต้น scheduled tasks
+>>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
     ScheduledTasksManager().startScheduledTasks();
   }
 
@@ -192,7 +204,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  // เพิ่มเมธอดนี้ในคลาส _AdminDashboardState
   Future<void> _checkExpiredBookingsManually() async {
     try {
       setState(() {
@@ -204,6 +215,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         SnackBar(content: Text('กำลังตรวจสอบคำขอหมดเวลา กรุณารอสักครู่...')),
       );
 
+<<<<<<< HEAD
       // เรียกใช้ฟังก์ชัน HTTP โดยตรง
       try {
         // ดึงคำขอที่มีสถานะ pending และหมดเวลาแล้ว
@@ -274,11 +286,53 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
         // โหลดข้อมูลใหม่
         await _loadDashboardData();
+=======
+      try {
+        // กระตุ้น Cloud Function ผ่าน Firestore Trigger
+        await FirebaseFirestore.instance
+            .collection('triggers')
+            .doc('checkExpiredBookings')
+            .set({
+          'lastTriggered': FieldValue.serverTimestamp(),
+          'triggeredBy': 'admin',
+          'manual': true
+        });
+>>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
+
+        // รอให้ Cloud Function ทำงานเสร็จ
+        await Future.delayed(Duration(seconds: 3));
+
+        // ดึงข้อมูลผลลัพธ์การทำงานล่าสุด
+        DocumentSnapshot triggerDoc = await FirebaseFirestore.instance
+            .collection('triggers')
+            .doc('checkExpiredBookings')
+            .get();
+
+        Map<String, dynamic>? data = triggerDoc.data() as Map<String, dynamic>?;
+
+        if (data != null && data.containsKey('lastRun')) {
+          Timestamp? lastRun = data['lastRun'] as Timestamp?;
+          int processedCount = data['processedCount'] ?? 0;
+
+          setState(() {
+            _lastTriggeredTime = lastRun != null
+                ? DateFormat('dd/MM/yyyy HH:mm:ss').format(lastRun.toDate())
+                : "ไม่มีข้อมูล";
+            _processedBookingsCount = processedCount;
+          });
+        }
+
+        // โหลดข้อมูลใหม่
+        await _loadDashboardData();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
+<<<<<<< HEAD
                 'ตรวจสอบและอัพเดตคำขอหมดเวลาสำเร็จ: ${expiredBookingIds.length} รายการ'),
+=======
+                'ตรวจสอบและอัพเดตคำขอหมดเวลาเรียบร้อยแล้ว: $_processedBookingsCount รายการ'),
+>>>>>>> 0c43491bad01efc034fced0f1a6fc1a9b438d567
             backgroundColor: Colors.green,
           ),
         );
@@ -303,6 +357,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  // เพิ่มเข้าไปในคลาส _AdminDashboardState หลังฟังก์ชัน initState()
+  Future<void> _ensureFirestoreTriggersExist() async {
+    try {
+      // ตรวจสอบว่าเอกสาร trigger มีอยู่แล้วหรือไม่
+      DocumentSnapshot triggerDoc = await FirebaseFirestore.instance
+          .collection('triggers')
+          .doc('checkExpiredBookings')
+          .get();
+
+      if (!triggerDoc.exists) {
+        // ถ้ายังไม่มีเอกสาร ให้สร้างใหม่
+        await FirebaseFirestore.instance
+            .collection('triggers')
+            .doc('checkExpiredBookings')
+            .set({
+          'lastTriggered': null,
+          'initialized': true,
+          'createdAt': FieldValue.serverTimestamp()
+        });
+        print("สร้างเอกสาร trigger เริ่มต้นเรียบร้อยแล้ว");
+      } else {
+        print("มีเอกสาร trigger อยู่แล้ว - ไม่ต้องสร้างใหม่");
+      }
+    } catch (e) {
+      print("เกิดข้อผิดพลาดในการสร้างเอกสาร trigger: $e");
     }
   }
 
@@ -1154,6 +1236,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
             color: Colors.grey.shade800,
           ),
         ),
+        // เพิ่มไว้ต่อจากเมนูที่มีอยู่เดิม
+        SizedBox(height: 8),
+        _buildManagementCard(
+          'ประวัติการลบคำขอหมดเวลา',
+          'ดูรายการคำขอที่ถูกลบเพราะหมดเวลา',
+          Icons.delete_sweep,
+          Colors.red.shade700,
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => DeletedBookingsPage()),
+            );
+          },
+        ),
         SizedBox(height: 12),
         _buildManagementCard(
           'อนุมัติพี่เลี้ยงแมว',
@@ -1230,11 +1326,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
           Icons.attach_money,
           Colors.teal,
           () {
+            // ตำแหน่งที่มีการเรียกใช้ ServiceFeeManagementPage
+
             Navigator.push(
               context,
               MaterialPageRoute(
                   builder: (context) => ServiceFeeManagementPage()),
-            ).then((_) => _loadDashboardData());
+            ).then((value) {
+              // เรียกใช้ _loadDashboardData หลังจากกลับมาจากหน้าจัดการค่าบริการ
+              // เพื่อให้แน่ใจว่าข้อมูลถูกรีเฟรช
+              _loadDashboardData();
+            });
           },
         ),
         SizedBox(height: 8),
@@ -1251,6 +1353,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
           },
           badgeCount: _expiredBookingsCount,
         ),
+        // เพิ่มเมนูจัดการเช็คลิสต์
+        _buildManagementCard(
+          'ตรวจสอบเช็คลิสต์',
+          'ดูรายละเอียดการดูแลแมวจากเช็คลิสต์ของผู้รับเลี้ยง',
+          Icons.checklist,
+          Colors.teal,
+          () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChecklistManagementPage(),
+              ),
+            );
+          },
+        ),
+        SizedBox(height: 8),
 
         // เพิ่มปุ่มตรวจสอบคำขอหมดเวลาทันที
         SizedBox(height: 20),

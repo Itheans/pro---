@@ -10,6 +10,7 @@ import 'package:myproject/page2.dart/showreviwe.dart';
 import 'package:myproject/pages.dart/reviwe.dart';
 import 'package:myproject/pages.dart/sitterscreen/bookingService.dart';
 import 'package:myproject/pages.dart/sitterscreen/bookscreen.dart';
+import 'package:myproject/services/ServiceFeeCalculator.dart';
 import 'package:myproject/services/shared_pref.dart';
 
 class SitterProfileScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class SitterProfileScreen extends StatefulWidget {
 }
 
 class _SitterProfileScreenState extends State<SitterProfileScreen> {
+  // เพิ่มตัวแปร
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   bool _isLoading = true;
   Map<String, dynamic>? _sitterData;
@@ -41,11 +43,43 @@ class _SitterProfileScreenState extends State<SitterProfileScreen> {
   double _averageRating = 0;
   bool _loadingReviews = true;
 
+  // เพิ่มตัวแปรสำหรับเก็บรายละเอียดค่าบริการ
+  Map<String, double> _feeDetails = {};
+  bool _isCalculatingFee = false;
+
   @override
   void initState() {
     super.initState();
     _loadSitterData();
     _loadReviews();
+    _calculateServiceFee(); // เพิ่มการเรียกคำนวณค่าบริการ
+  }
+
+  Future<void> _calculateServiceFee() async {
+    setState(() {
+      _isCalculatingFee = true;
+    });
+
+    try {
+      // คำนวณค่าบริการโดยใช้ ServiceFeeCalculator
+      Map<String, double> feeDetails =
+          await ServiceFeeCalculator.calculateTotalFee(
+        widget.targetDates.length, // จำนวนวันที่เลือก
+        widget.catIds.length, // จำนวนแมวที่เลือก
+      );
+
+      setState(() {
+        _feeDetails = feeDetails;
+        _isCalculatingFee = false;
+      });
+
+      print('Calculated fees: $feeDetails');
+    } catch (e) {
+      print('Error calculating service fee: $e');
+      setState(() {
+        _isCalculatingFee = false;
+      });
+    }
   }
 
   Future<void> _loadSitterData() async {
@@ -485,9 +519,13 @@ class _SitterProfileScreenState extends State<SitterProfileScreen> {
                     ? walletFromFirestore
                     : walletFromPrefs;
 
-                // คำนวณราคาทั้งหมด
-                double totalPrice = (_sitterData!['pricePerDay'] ?? 50.0) *
-                    widget.targetDates.length;
+                // แก้ไขการคำนวณราคา: ใช้ราคาจาก ServiceFeeCalculator แทน
+                double totalPrice = _feeDetails.isEmpty
+                    ? ((_sitterData!['pricePerDay'] ?? 50.0) *
+                        widget.targetDates.length)
+                    : _feeDetails['total'] ??
+                        ((_sitterData!['pricePerDay'] ?? 50.0) *
+                            widget.targetDates.length);
 
                 // ตรวจสอบว่ามีเงินเพียงพอหรือไม่
                 if (currentWallet < totalPrice) {
@@ -509,7 +547,13 @@ class _SitterProfileScreenState extends State<SitterProfileScreen> {
                       sitterId: widget.sitterId,
                       selectedDates: widget.targetDates,
                       catIds: widget.catIds,
-                      pricePerDay: _sitterData!['pricePerDay'] ?? 50.0,
+                      // ส่งข้อมูลราคาใหม่ โดยใช้ค่าจาก ServiceFeeCalculator ถ้ามี
+                      pricePerDay: _feeDetails.isEmpty
+                          ? (_sitterData!['pricePerDay'] ?? 50.0)
+                          : _feeDetails['baseFee'] ??
+                              (_sitterData!['pricePerDay'] ?? 50.0),
+                      // ส่งข้อมูลค่าบริการทั้งหมดไปด้วย
+                      feeDetails: _feeDetails,
                       bookingRef: widget.bookingRef, // ส่งต่อข้อมูล reference
                     ),
                   ),

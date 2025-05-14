@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:myproject/pages.dart/reviwe.dart';
 
+import 'package:myproject/pages.dart/user_checklist_page.dart'; // เพิ่ม import นี้
+
 class BookingStatusScreen extends StatefulWidget {
   @override
   _BookingStatusScreenState createState() => _BookingStatusScreenState();
@@ -247,18 +249,41 @@ class _BookingStatusScreenState extends State<BookingStatusScreen> {
                           );
                         },
                       ),
-                    if (bookingData['status'] == 'pending')
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => _cancelBooking(context, bookingId),
-                          icon: Icon(Icons.cancel, color: Colors.red),
-                          label: Text(
-                            'ยกเลิกการจอง',
-                            style: TextStyle(color: Colors.red),
+                    // เพิ่มปุ่มดูรายงานเช็คลิสต์
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (bookingData['status'] == 'in_progress' ||
+                            bookingData['status'] == 'completed')
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => UserChecklistPage(
+                                    bookingId:
+                                        bookingId, // แก้จาก doc.id เป็น bookingId
+                                  ),
+                                ),
+                              );
+                            },
+                            icon: Icon(Icons.assignment, color: Colors.green),
+                            label: Text(
+                              'ดูรายงานการดูแล',
+                              style: TextStyle(color: Colors.green),
+                            ),
                           ),
-                        ),
-                      ),
+                        if (bookingData['status'] == 'pending')
+                          TextButton.icon(
+                            onPressed: () => _cancelBooking(context, bookingId),
+                            icon: Icon(Icons.cancel, color: Colors.red),
+                            label: Text(
+                              'ยกเลิกการจอง',
+                              style: TextStyle(color: Colors.red),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
               ),

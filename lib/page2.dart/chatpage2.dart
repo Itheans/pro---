@@ -275,7 +275,7 @@ class _ChatpageState extends State<ChatPage> {
         builder: (context) => Todayscreen(
           chatRoomId: chatRoomId,
           receiverName: widget.name,
-          senderUsername: myUserName,
+          senderUsername: myUserName, bookingId: '',
         ),
       ),
     );

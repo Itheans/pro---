@@ -213,7 +213,7 @@ class _MyWidgetState extends State<Chat> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => Todayscreen()),
+                        MaterialPageRoute(builder: (context) => Todayscreen(bookingId: '',)),
                       );
                     },
                     tooltip: 'ไปที่หน้าบันทึกเวลา',

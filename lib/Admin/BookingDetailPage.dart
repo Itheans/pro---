@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:myproject/Admin/NotificationService.dart';
+import 'package:myproject/services/checklist_service.dart'; // เปลี่ยนเป็น ChecklistService
 import 'package:url_launcher/url_launcher.dart';
+import 'package:myproject/models/checklist_model.dart';
 
 class BookingDetailPage extends StatefulWidget {
   final String bookingId;
 
-  const BookingDetailPage({Key? key, required this.bookingId})
-      : super(key: key);
+  BookingDetailPage({Key? key, required this.bookingId}) : super(key: key);
 
   @override
   _BookingDetailPageState createState() => _BookingDetailPageState();
@@ -20,13 +21,59 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
   Map<String, dynamic>? _userData;
   Map<String, dynamic>? _sitterData;
   List<Map<String, dynamic>> _catsList = [];
+  List<ChecklistItem> _checklistItems = [];
+  String? _selectedCatId;
   final NotificationService _notificationService = NotificationService();
   TextEditingController _messageController = TextEditingController();
+  final ChecklistService _checklistService =
+      ChecklistService(); // ใช้ ChecklistService
 
   @override
   void initState() {
     super.initState();
     _loadBookingData();
+  }
+
+// เพิ่มเมธอดสำหรับแสดงรูปภาพ
+  void _showImageDialog(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: Text('รูปภาพ'),
+              leading: IconButton(
+                icon: Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+              automaticallyImplyLeading: false,
+            ),
+            Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.7,
+              ),
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.contain,
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                          : null,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteBooking() async {
@@ -162,7 +209,18 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
         }
       }
 
-      setState(() => _isLoading = false);
+      // ดึงข้อมูลเช็คลิสต์
+      List<ChecklistItem> checklistItems =
+          await _checklistService.getChecklistByBooking(widget.bookingId);
+
+      setState(() {
+        _checklistItems = checklistItems;
+        // ถ้ามีแมว ให้เลือกแมวตัวแรก
+        if (_catsList.isNotEmpty && _selectedCatId == null) {
+          _selectedCatId = _catsList.first['id'];
+        }
+        _isLoading = false;
+      });
     } catch (e) {
       print('Error loading booking data: $e');
       setState(() => _isLoading = false);
@@ -308,7 +366,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
       case 'cancelled':
         return Colors.red;
       default:
-        return Colors.grey;
+        return Colors.green;
     }
   }
 
@@ -325,7 +383,7 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
       case 'cancelled':
         return 'ยกเลิก';
       default:
-        return 'ไม่ทราบสถานะ';
+        return 'กำลังดำเนินการ';
     }
   }
 
@@ -420,7 +478,10 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                       _buildBookingDetails(),
                       const SizedBox(height: 16),
                       _buildCatsList(),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+                      // เพิ่มส่วนเช็คลิสต์ตรงนี้
+                      _buildChecklistSection(),
+                      const SizedBox(height: 16),
                       _buildAdminActions(),
                     ],
                   ),
@@ -840,11 +901,305 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
                   isThreeLine: cat['age'] != null,
                   dense: true,
                   contentPadding: EdgeInsets.zero,
+                  // เพิ่มการเลือกแมวเพื่อดูเช็คลิสต์
+                  trailing: Radio<String>(
+                    value: cat['id'],
+                    groupValue: _selectedCatId,
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedCatId = value;
+                      });
+                    },
+                    activeColor: Colors.deepOrange,
+                  ),
                 );
               },
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // เพิ่มเมธอดใหม่สำหรับแสดงเช็คลิสต์
+  Widget _buildChecklistSection() {
+    if (_bookingData!['status'] != 'in_progress' &&
+        _bookingData!['status'] != 'completed') {
+      return Container(); // ไม่แสดงเช็คลิสต์ถ้าสถานะไม่ใช่กำลังดำเนินการหรือเสร็จสิ้น
+    }
+
+    if (_selectedCatId == null) {
+      return Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.assignment, color: Colors.deepOrange),
+                  SizedBox(width: 8),
+                  Text(
+                    'เช็คลิสต์การดูแล',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              Center(
+                child: Text('กรุณาเลือกแมวเพื่อดูเช็คลิสต์'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // กรองเช็คลิสต์ตามแมวที่เลือก
+    List<ChecklistItem> filteredItems =
+        _checklistItems.where((item) => item.catId == _selectedCatId).toList();
+
+    if (filteredItems.isEmpty) {
+      return Card(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.assignment, color: Colors.deepOrange),
+                  SizedBox(width: 8),
+                  Text(
+                    'เช็คลิสต์การดูแล',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 16),
+              Center(
+                child: Text('ยังไม่มีรายการเช็คลิสต์สำหรับแมวตัวนี้'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // คำนวณความคืบหน้า
+    int completedTasks = filteredItems.where((item) => item.isCompleted).length;
+    double progress =
+        filteredItems.isEmpty ? 0.0 : completedTasks / filteredItems.length;
+
+    // แยกรายการเป็นที่ทำแล้วกับยังไม่ได้ทำ
+    List<ChecklistItem> completedItems =
+        filteredItems.where((item) => item.isCompleted).toList();
+    List<ChecklistItem> pendingItems =
+        filteredItems.where((item) => !item.isCompleted).toList();
+
+    return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.assignment, color: Colors.deepOrange),
+                SizedBox(width: 8),
+                Text(
+                  'เช็คลิสต์การดูแล',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'ความคืบหน้า',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '${(progress * 100).toInt()}%',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepOrange,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
+            LinearProgressIndicator(
+              value: progress,
+              minHeight: 10,
+              backgroundColor: Colors.grey[300],
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.deepOrange),
+            ),
+            SizedBox(height: 4),
+            Text(
+              'เสร็จแล้ว $completedTasks จาก ${filteredItems.length} รายการ',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            SizedBox(height: 16),
+
+            // แสดงรายการที่ทำแล้ว
+            if (completedItems.isNotEmpty) ...[
+              Text(
+                'รายการที่ดำเนินการแล้ว',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              SizedBox(height: 8),
+              ...completedItems.map((item) => _buildChecklistItemCard(item)),
+              SizedBox(height: 16),
+            ],
+
+            // แสดงรายการที่ยังไม่ได้ทำ
+            if (pendingItems.isNotEmpty) ...[
+              Text(
+                'รายการที่รอดำเนินการ',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.orange,
+                ),
+              ),
+              SizedBox(height: 8),
+              ...pendingItems
+                  .map((item) => _buildChecklistItemCard(item, enabled: false)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildChecklistItemCard(ChecklistItem item, {bool enabled = true}) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: item.isCompleted ? Colors.green.shade50 : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color:
+              item.isCompleted ? Colors.green.shade200 : Colors.grey.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                item.isCompleted ? Icons.check_circle : Icons.circle_outlined,
+                color: item.isCompleted ? Colors.green : Colors.grey,
+                size: 20,
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  item.description,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    decoration:
+                        item.isCompleted ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (item.isCompleted)
+            Padding(
+              padding: EdgeInsets.only(left: 28, top: 4),
+              child: Text(
+                'เสร็จเมื่อ: ${DateFormat('dd/MM/yyyy HH:mm').format(item.timestamp)}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.green,
+                ),
+              ),
+            ),
+          if (item.imageUrl != null && item.imageUrl!.isNotEmpty)
+            Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: GestureDetector(
+                onTap: () => _showImageDialog(item.imageUrl!),
+                child: Container(
+                  height: 100,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    image: DecorationImage(
+                      image: NetworkImage(item.imageUrl!),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          if (item.note != null && item.note!.isNotEmpty)
+            Container(
+              margin: EdgeInsets.only(top: 8),
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.yellow.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: Colors.yellow.shade200,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'บันทึก:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    item.note!,
+                    style: TextStyle(
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -902,6 +1257,23 @@ class _BookingDetailPageState extends State<BookingDetailPage> {
               ],
             ),
             const SizedBox(height: 16),
+            // สร้างปุ่มสำหรับแต่ละสถานะ
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: nextStatuses.map((status) {
+                return ElevatedButton.icon(
+                  onPressed: () => _showMessageDialog(status['value']),
+                  icon: Icon(_getIconForStatus(status['value'])),
+                  label: Text(status['label']),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: status['color'],
+                    foregroundColor: Colors.white,
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                );
+              }).toList(),
+            ),
             // เพิ่มปุ่มลบการจอง
             Divider(height: 32),
             InkWell(

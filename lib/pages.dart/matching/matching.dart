@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:myproject/Admin/NotificationService.dart';
+import 'package:myproject/Local_Noti/NotiClass.dart';
+import 'package:myproject/models/booking_model.dart';
 import 'dart:math';
 
 import 'package:myproject/pages.dart/sitterscreen/SitterProfileScreen.dart';
@@ -483,6 +486,105 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
     _getCurrentLocation();
   }
 
+  Future<void> _proceedToSitterSearch() async {
+    if (widget.catIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('กรุณาเลือกแมวอย่างน้อย 1 ตัว')),
+      );
+      return;
+    }
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      setState(() => _isLoading = true);
+
+      // เก็บ ID ของแมวทั้งหมดที่ถูกเลือก
+      final List<String> catIds = widget.catIds;
+
+      // ตรวจสอบว่ามีผู้รับเลี้ยงที่ว่างหรือไม่
+      final availableSitters = await _sitterService.findNearestSitters(
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+        dates: widget.targetDates,
+      );
+
+      if (availableSitters.isEmpty) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบผู้รับเลี้ยงที่ว่างในระยะ 5 กม.')),
+        );
+        return;
+      }
+
+      // คำนวณเวลาหมดอายุ 15 นาทีจากเวลาปัจจุบัน
+      final DateTime expirationTime = DateTime.now().add(Duration(minutes: 15));
+
+      // สร้างข้อมูลการจอง
+      final bookingRequest = {
+        'userId': user.uid,
+        'catIds': catIds,
+        'dates':
+            widget.targetDates.map((date) => Timestamp.fromDate(date)).toList(),
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+        'expirationTime':
+            Timestamp.fromDate(expirationTime), // เพิ่มเวลาหมดอายุ 15 นาที
+        'sitterId': availableSitters.first['id'], // เลือกผู้รับเลี้ยงคนแรกที่พบ
+      };
+
+      // บันทึกข้อมูลลงใน Firestore
+      DocumentReference bookingRef = await FirebaseFirestore.instance
+          .collection('bookings')
+          .add(bookingRequest);
+
+      // แจ้งเตือนผู้รับเลี้ยงว่ามีคำขอใหม่
+      NotificationService notificationService = NotificationService();
+      await notificationService.sendBookingStatusNotification(
+        userId: availableSitters.first['id'], // sitterId
+        bookingId: bookingRef.id,
+        status: 'pending',
+        message: 'คุณมีคำขอรับเลี้ยงแมวใหม่ กรุณาตอบรับภายใน 15 นาที',
+      );
+
+      // แจ้งเตือนในแอป (local notification) สำหรับผู้ใช้ปัจจุบัน
+      NotifiationServices().sendCustomNotification(
+        title: 'สร้างคำขอสำเร็จ',
+        body:
+            'คำขอของคุณจะหมดอายุในเวลา ${DateFormat('HH:mm').format(expirationTime)}',
+      );
+
+      setState(() => _isLoading = false);
+
+      // แสดงข้อความคำขอจะหมดอายุในอีก 15 นาที
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'คำขอนี้จะหมดอายุในเวลา ${DateFormat('HH:mm').format(expirationTime)}'),
+          duration: Duration(seconds: 5),
+        ),
+      );
+
+      // นำทางไปยังหน้าค้นหาผู้รับเลี้ยง
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SearchSittersScreen(
+            targetDates: widget.targetDates,
+            catIds: widget.catIds,
+            bookingRef: bookingRef.id, // ส่ง ID ของ booking request ไปด้วย
+          ),
+        ),
+      );
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+      );
+    }
+  }
+
   Future<void> _getCurrentLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -534,6 +636,35 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
     }
   }
 
+// ตัวอย่างโค้ดในไฟล์ที่สร้างการจอง
+  Future<String> createBooking(BookingModel booking) async {
+    try {
+      // ตั้งเวลาหมดอายุเป็น 15 นาทีจากปัจจุบัน
+      DateTime expirationTime = DateTime.now().add(Duration(minutes: 1));
+
+      // เพิ่มบรรทัดนี้เพื่อตรวจสอบว่ามีการตั้งเวลาหมดอายุจริง
+      print('การจองนี้จะหมดอายุเมื่อ: $expirationTime');
+
+      final bookingData = {
+        ...booking.toMap(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'status': 'pending',
+        // เพิ่มบรรทัดนี้ให้แน่ใจว่ามีการตั้ง expirationTime
+        'expirationTime': Timestamp.fromDate(expirationTime),
+      };
+
+      DocumentReference docRef = await FirebaseFirestore.instance
+          .collection('bookings')
+          .add(bookingData);
+
+      return docRef.id;
+    } catch (e) {
+      print('Error creating booking: $e');
+      throw e;
+    }
+  }
+
   Future<void> _searchAvailableSitters() async {
     if (_currentPosition == null) return;
 
@@ -560,90 +691,6 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       return 'วันที่ ${_dateFormatter.format(widget.targetDates.first)}';
     } else {
       return '${_dateFormatter.format(widget.targetDates.first)} - ${_dateFormatter.format(widget.targetDates.last)}';
-    }
-  }
-
-  Future<void> _proceedToSitterSearch() async {
-    if (widget.catIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรุณาเลือกแมวอย่างน้อย 1 ตัว')),
-      );
-      return;
-    }
-
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      // เก็บ ID ของแมวทั้งหมดที่ถูกเลือก
-      final List<String> catIds = widget.catIds;
-
-      // ตรวจสอบว่ามีผู้รับเลี้ยงที่ว่างหรือไม่
-      final availableSitters = await _sitterService.findNearestSitters(
-        latitude: _currentPosition!.latitude,
-        longitude: _currentPosition!.longitude,
-        dates: widget.targetDates,
-      );
-
-      if (availableSitters.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่พบผู้รับเลี้ยงที่ว่างในระยะ 5 กม.')),
-        );
-        return;
-      }
-
-      // คำนวณเวลาหมดอายุ 15 นาทีจากเวลาปัจจุบัน
-      final DateTime expirationTime = DateTime.now().add(Duration(minutes: 15));
-
-      // แสดงข้อความคำขอจะหมดอายุในอีก 15 นาที
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-              'คำขอนี้จะหมดอายุในเวลา ${DateFormat('HH:mm').format(expirationTime)}'),
-          duration: Duration(seconds: 5),
-        ),
-      );
-
-      // สร้างข้อมูลการจอง
-      final bookingRequest = {
-        'userId': user.uid,
-        'catIds': catIds,
-        'dates':
-            widget.targetDates.map((date) => Timestamp.fromDate(date)).toList(),
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-        'expirationTime':
-            Timestamp.fromDate(expirationTime), // เพิ่มเวลาหมดอายุ 15 นาที
-        'sitterId': availableSitters.first['id'], // เลือกผู้รับเลี้ยงคนแรกที่พบ
-      };
-
-      // บันทึกข้อมูลลงใน Firestore
-      DocumentReference bookingRef = await FirebaseFirestore.instance
-          .collection('bookings')
-          .add(bookingRequest);
-
-      // แจ้งเตือนผู้ใช้ว่าบันทึกข้อมูลแล้ว
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(
-                'บันทึกข้อมูลการจองสำเร็จ คำขอนี้จะหมดอายุใน 15 นาที (เวลา ${DateFormat('HH:mm').format(expirationTime)})')),
-      );
-
-      // เลือกผู้รับเลี้ยงจาก availableSitters ที่ได้ค้นหาไว้แล้ว
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SearchSittersScreen(
-            targetDates: widget.targetDates,
-            catIds: widget.catIds,
-            bookingRef: bookingRef.id, // ส่ง ID ของ booking request ไปด้วย
-          ),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-      );
     }
   }
 

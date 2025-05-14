@@ -1,39 +1,69 @@
 import 'dart:async';
-import 'package:myproject/Admin/BookingCleanupService.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ScheduledTasksManager {
-  Timer? _bookingCleanupTimer;
-  final BookingCleanupService _cleanupService = BookingCleanupService();
+  // Singleton pattern เพื่อให้มีเพียงอินสแตนซ์เดียวทั่วทั้งแอป
   static final ScheduledTasksManager _instance =
       ScheduledTasksManager._internal();
-
-  // Singleton pattern
-  factory ScheduledTasksManager() {
-    return _instance;
-  }
-
+  factory ScheduledTasksManager() => _instance;
   ScheduledTasksManager._internal();
 
+  // ตัวจับเวลาสำหรับตรวจสอบคำขอที่หมดอายุ
+  Timer? _expiredBookingsTimer;
+
+  // สถานะการทำงาน
+  bool _isRunning = false;
+
+  // เริ่มการทำงานของตัวจับเวลา
+  // เพิ่มการตรวจสอบทันทีเมื่อเริ่มต้นแอป (ตรวจสอบเวลา startup)
   void startScheduledTasks() {
-    // หยุดตัวจับเวลาเดิมก่อน (ถ้ามี)
-    stopScheduledTasks();
+    if (!_isRunning) {
+      _isRunning = true;
 
-    // ตั้งเวลาให้ทำงานทุก 1 นาที เพื่อตรวจสอบบ่อยขึ้น
-    _bookingCleanupTimer = Timer.periodic(Duration(minutes: 1), (timer) {
-      _cleanupService.runCleanupTasks();
-    });
+      // เพิ่มบรรทัดนี้ - ตรวจสอบทันทีเมื่อเริ่มแอป
+      _checkExpiredBookings();
 
-    print('Scheduled tasks started with 1 minute interval');
+      // ลดเวลาตรวจสอบเป็นทุกๆ 1 นาที
+      _expiredBookingsTimer = Timer.periodic(Duration(minutes: 1), (timer) {
+        _checkExpiredBookings();
+      });
+
+      print('ScheduledTasksManager: เริ่มการทำงานของตัวตรวจสอบแล้ว');
+    }
   }
 
+  // หยุดการทำงานของตัวจับเวลา
   void stopScheduledTasks() {
-    _bookingCleanupTimer?.cancel();
-    _bookingCleanupTimer = null;
-    print('Scheduled tasks stopped');
+    if (_isRunning) {
+      _expiredBookingsTimer?.cancel();
+      _isRunning = false;
+      print('ScheduledTasksManager: หยุดการทำงานของตัวตรวจสอบแล้ว');
+    }
   }
 
-  Future<void> runTasksNow() async {
-    await _cleanupService.runCleanupTasks();
-    print('Tasks run manually');
+  // ตรวจสอบคำขอที่หมดอายุ
+  Future<void> _checkExpiredBookings() async {
+    try {
+      print('ScheduledTasksManager: กำลังตรวจสอบคำขอที่หมดอายุ...');
+
+      // เรียกใช้ Cloud Function โดยการอัพเดทเอกสาร trigger
+      await FirebaseFirestore.instance
+          .collection('triggers')
+          .doc('checkExpiredBookings')
+          .set({
+        'lastTriggered': FieldValue.serverTimestamp(),
+        'triggeredBy': 'scheduled_task',
+        'timestamp': DateTime.now().toIso8601String(),
+      }, SetOptions(merge: true));
+
+      print('ScheduledTasksManager: ส่งคำขอตรวจสอบคำขอที่หมดอายุเรียบร้อยแล้ว');
+    } catch (e) {
+      print('ScheduledTasksManager: เกิดข้อผิดพลาด - $e');
+    }
+  }
+
+  // เรียกใช้ฟังก์ชันตรวจสอบคำขอที่หมดอายุโดยตรง
+  Future<void> checkExpiredBookingsManually() async {
+    return _checkExpiredBookings();
   }
 }
