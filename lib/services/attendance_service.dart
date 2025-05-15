@@ -126,4 +126,46 @@ class AttendanceService {
     final todayRecord = await getTodayRecord();
     return todayRecord != null;
   }
+
+  // เพิ่มฟังก์ชันลบประวัติ
+  Future<bool> deleteRecord(String recordId) async {
+    try {
+      // อ่านข้อมูลทั้งหมด
+      List<AttendanceRecord> records = await getAttendanceRecords();
+
+      // เก็บจำนวนรายการเดิม
+      int initialLength = records.length;
+
+      // ลบข้อมูลตาม id
+      records.removeWhere((record) => record.id == recordId);
+
+      // ตรวจสอบว่าได้ลบข้อมูลจริงหรือไม่
+      if (initialLength == records.length) {
+        print('ไม่พบรายการที่ต้องการลบ ID: $recordId');
+        return false;
+      }
+
+      // บันทึกข้อมูลที่เหลือกลับไป
+      await _saveRecords(records);
+
+      print('ลบรายการ ID: $recordId สำเร็จ');
+      return true;
+    } catch (e) {
+      print('เกิดข้อผิดพลาดในการลบประวัติ: $e');
+      return false;
+    }
+  }
+
+  // เพิ่มฟังก์ชันลบประวัติทั้งหมด
+  Future<bool> deleteAllRecords() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      bool success = await prefs.remove(STORAGE_KEY);
+      print('ลบประวัติทั้งหมด: $success');
+      return success;
+    } catch (e) {
+      print('เกิดข้อผิดพลาดในการลบประวัติทั้งหมด: $e');
+      return false;
+    }
+  }
 }

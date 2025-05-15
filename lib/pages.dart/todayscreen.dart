@@ -9,18 +9,21 @@ import '../services/attendance_service.dart';
 import '../models/attendance_record.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// นิยามค่าคงที่สำหรับ timezone ของประเทศไทย (UTC+7)
+const int thaiTimeZoneOffset = 7;
+
 class Todayscreen extends StatefulWidget {
   final String? chatRoomId;
   final String? receiverName;
   final String? senderUsername;
-  final String bookingId; // Add this line
+  final String bookingId; // เปลี่ยนให้รับค่าว่างได้
 
   const Todayscreen({
     Key? key,
     this.chatRoomId,
     this.receiverName,
     this.senderUsername,
-    required this.bookingId,
+    this.bookingId = '', // กำหนดค่าเริ่มต้นเป็นค่าว่าง
   }) : super(key: key);
 
   @override
@@ -40,26 +43,42 @@ class _TodayscreenState extends State<Todayscreen> {
   File? _capturedImage;
   String? _imagePath;
 
-  TimeOfDay _checkInTime = TimeOfDay.now(); // เปลี่ยนเป็นเวลาปัจจุบัน
+  // เริ่มต้นค่าด้วยเวลาประเทศไทย
+  late TimeOfDay _checkInTime;
   TimeOfDay? _checkOutTime;
   bool _hasCheckedIn = false;
   bool _hasCheckedOut = false;
 
-  DateTime _currentDateTime = DateTime.now();
+  // เก็บเวลาปัจจุบันของไทย
+  late DateTime _currentDateTime;
   Timer? _timer;
+
+  // ฟังก์ชันสำหรับรับเวลาปัจจุบันของประเทศไทย
+  DateTime getThailandTime() {
+    final now = DateTime.now().toUtc();
+    return now.add(Duration(hours: thaiTimeZoneOffset));
+  }
 
   @override
   void initState() {
     super.initState();
+
+    // ตั้งค่าเวลาเริ่มต้นเป็นเวลาไทย
+    _currentDateTime = getThailandTime();
+    _checkInTime = TimeOfDay.fromDateTime(_currentDateTime);
+
     // อัพเดตเวลาทุกวินาที
     _timer = Timer.periodic(Duration(seconds: 1), (timer) {
       setState(() {
-        _currentDateTime = DateTime.now();
+        _currentDateTime = getThailandTime();
       });
     });
 
     // โหลดข้อมูลวันนี้
     _loadTodayRecord();
+
+    // เพิ่มการตรวจสอบสถานะการจอง
+    _checkBookingStatus();
   }
 
   Future<void> _loadTodayRecord() async {
@@ -78,7 +97,15 @@ class _TodayscreenState extends State<Todayscreen> {
 
       final todayRecord = await _attendanceService.getTodayRecord();
 
+      print(
+          'โหลดข้อมูลวันนี้: ${todayRecord != null ? 'พบข้อมูล' : 'ไม่พบข้อมูล'}');
+
       if (todayRecord != null) {
+        print('Record ID: ${todayRecord.id}');
+        print('Check-in time: ${todayRecord.checkInTime.format(context)}');
+        print(
+            'Check-out time: ${todayRecord.checkOutTime?.format(context) ?? 'ยังไม่ได้เช็คเอาท์'}');
+
         setState(() {
           _currentRecordId = todayRecord.id;
           _checkInTime = todayRecord.checkInTime;
@@ -146,6 +173,8 @@ class _TodayscreenState extends State<Todayscreen> {
                   _currentRecordId = null;
                   _capturedImage = null;
                   _imagePath = null;
+                  // ตั้งเวลาเช็คอินใหม่เป็นเวลาไทยปัจจุบัน
+                  _checkInTime = TimeOfDay.fromDateTime(getThailandTime());
                 });
                 Navigator.pop(context);
               },
@@ -202,6 +231,68 @@ class _TodayscreenState extends State<Todayscreen> {
     }
   }
 
+  void _checkBookingStatus() async {
+    // ข้ามการตรวจสอบถ้า bookingId เป็นค่าว่าง
+    if (widget.bookingId.isEmpty) {
+      print('bookingId เป็นค่าว่าง ข้ามการตรวจสอบสถานะการจอง');
+      return;
+    }
+
+    try {
+      DocumentSnapshot bookingDoc = await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .get();
+
+      if (bookingDoc.exists) {
+        Map<String, dynamic> data = bookingDoc.data() as Map<String, dynamic>;
+
+        // ตรวจสอบสถานะ
+        if (data['status'] == 'completed' && data['checkOutTime'] != null) {
+          setState(() {
+            _hasCheckedOut = true;
+            // แปลงเวลาจาก Timestamp เป็น TimeOfDay
+            if (data['checkOutTime'] is Timestamp) {
+              DateTime checkOutDateTime =
+                  (data['checkOutTime'] as Timestamp).toDate();
+
+              // ปรับให้เป็นเวลาไทย
+              checkOutDateTime = checkOutDateTime.add(Duration(
+                  hours: checkOutDateTime.timeZoneOffset.inHours < 7
+                      ? (7 - checkOutDateTime.timeZoneOffset.inHours)
+                      : 0));
+
+              _checkOutTime = TimeOfDay.fromDateTime(checkOutDateTime);
+            }
+          });
+          print('สถานะการจอง: completed');
+        } else if (data['checkInTime'] != null) {
+          setState(() {
+            _hasCheckedIn = true;
+            // ถ้ามีข้อมูล checkInTime ใน Firestore ให้ใช้เวลานั้น
+            if (data['checkInTime'] is Timestamp) {
+              DateTime checkInDateTime =
+                  (data['checkInTime'] as Timestamp).toDate();
+
+              // ปรับให้เป็นเวลาไทย
+              checkInDateTime = checkInDateTime.add(Duration(
+                  hours: checkInDateTime.timeZoneOffset.inHours < 7
+                      ? (7 - checkInDateTime.timeZoneOffset.inHours)
+                      : 0));
+
+              _checkInTime = TimeOfDay.fromDateTime(checkInDateTime);
+            }
+          });
+          print('มีการเช็คอินแล้ว');
+        }
+      } else {
+        print('ไม่พบข้อมูลการจอง: ${widget.bookingId}');
+      }
+    } catch (e) {
+      print('Error checking booking status: $e');
+    }
+  }
+
   // ฟังก์ชันสำหรับเช็คอิน
   void _checkIn() async {
     if (_hasCheckedIn) return; // เช็คซ้ำอีกครั้งเพื่อความปลอดภัย
@@ -222,6 +313,27 @@ class _TodayscreenState extends State<Todayscreen> {
           _currentRecordId = record.id;
           _hasCheckedIn = true;
         });
+
+        // อัปเดท Firestore ถ้ามี bookingId
+        if (widget.bookingId.isNotEmpty) {
+          try {
+            // แปลงเวลาเป็น DateTime
+            final DateTime now = getThailandTime();
+            final DateTime checkInDateTime = DateTime(now.year, now.month,
+                now.day, _checkInTime.hour, _checkInTime.minute);
+
+            await FirebaseFirestore.instance
+                .collection('bookings')
+                .doc(widget.bookingId)
+                .update({
+              'checkInTime': checkInDateTime,
+              'lastUpdated': FieldValue.serverTimestamp(),
+            });
+            print('อัปเดทเวลาเช็คอินใน Firestore สำเร็จ');
+          } catch (e) {
+            print('ไม่สามารถอัปเดทเวลาเช็คอินใน Firestore: $e');
+          }
+        }
 
         // แสดงแจ้งเตือนบันทึกสำเร็จ
         ScaffoldMessenger.of(context).showSnackBar(
@@ -312,6 +424,31 @@ class _TodayscreenState extends State<Todayscreen> {
                     _hasCheckedIn = true;
                   });
 
+                  // อัปเดท Firestore ถ้ามี bookingId
+                  if (widget.bookingId.isNotEmpty) {
+                    try {
+                      // แปลงเวลาเป็น DateTime
+                      final DateTime now = getThailandTime();
+                      final DateTime checkInDateTime = DateTime(
+                          now.year,
+                          now.month,
+                          now.day,
+                          _checkInTime.hour,
+                          _checkInTime.minute);
+
+                      await FirebaseFirestore.instance
+                          .collection('bookings')
+                          .doc(widget.bookingId)
+                          .update({
+                        'checkInTime': checkInDateTime,
+                        'lastUpdated': FieldValue.serverTimestamp(),
+                      });
+                      print('อัปเดทเวลาเช็คอินใน Firestore สำเร็จ');
+                    } catch (e) {
+                      print('ไม่สามารถอัปเดทเวลาเช็คอินใน Firestore: $e');
+                    }
+                  }
+
                   // ปิดไดอะล็อก
                   Navigator.pop(context);
 
@@ -379,41 +516,101 @@ class _TodayscreenState extends State<Todayscreen> {
     }
   }
 
-  // Add this method to your state class
   Future<void> _checkOut() async {
+    print('เริ่มการเช็คเอาท์');
+    print(
+        'สถานะปัจจุบัน: hasCheckedIn=$_hasCheckedIn, hasCheckedOut=$_hasCheckedOut');
+    print('Current Record ID: $_currentRecordId');
+    print('Booking ID: ${widget.bookingId}');
+
+    if (!_hasCheckedIn || _hasCheckedOut) {
+      print('ไม่สามารถเช็คเอาท์ได้: ไม่ได้เช็คอินหรือเช็คเอาท์ไปแล้ว');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ไม่สามารถเช็คเอาท์ได้: ต้องเช็คอินก่อน'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
       setState(() {
         _isLoading = true;
       });
 
-      // Get current time
-      final now = DateTime.now();
+      // Get current time แบบเวลาไทย
+      final now = getThailandTime();
       _checkOutTime = TimeOfDay.fromDateTime(now);
+      print('กำหนดเวลาเช็คเอาท์: ${_checkOutTime!.format(context)}');
 
-      // Update Firestore document
-      await FirebaseFirestore.instance
-          .collection('bookings')
-          .doc(widget.bookingId)
-          .update({
-        'checkOutTime': now,
-        'status': 'completed',
-        'lastUpdated': FieldValue.serverTimestamp(),
-      });
+      // บันทึกการเช็คเอาท์ใน AttendanceService ถ้ามี currentRecordId
+      if (_currentRecordId != null) {
+        print(
+            'กำลังบันทึกเช็คเอาท์ใน AttendanceService สำหรับ ID: $_currentRecordId');
+        await _attendanceService.saveCheckOut(
+          _currentRecordId!,
+          _checkOutTime!,
+          'เช็คเอาท์สำเร็จ',
+        );
+        print('บันทึกเช็คเอาท์ใน AttendanceService สำเร็จ');
+      }
+
+      // อัพเดท Firestore เฉพาะเมื่อ bookingId ไม่ว่างเปล่า
+      if (widget.bookingId.isNotEmpty) {
+        try {
+          // ตรวจสอบว่าข้อมูลการจองมีอยู่จริง
+          DocumentSnapshot bookingSnapshot = await FirebaseFirestore.instance
+              .collection('bookings')
+              .doc(widget.bookingId)
+              .get();
+
+          if (bookingSnapshot.exists) {
+            print(
+                'พบข้อมูลการจอง สถานะปัจจุบัน: ${(bookingSnapshot.data() as Map<String, dynamic>)['status']}');
+
+            // Update Firestore document
+            print('กำลังอัพเดท Firestore สำหรับการจอง: ${widget.bookingId}');
+            await FirebaseFirestore.instance
+                .collection('bookings')
+                .doc(widget.bookingId)
+                .update({
+              'checkOutTime': now,
+              'status': 'completed',
+              'lastUpdated': FieldValue.serverTimestamp(),
+            });
+            print('อัพเดท Firestore สำเร็จ');
+          } else {
+            print('ไม่พบข้อมูลการจอง: ${widget.bookingId}');
+            // บันทึกเฉพาะในแอปโดยไม่อัพเดท Firestore
+            print('ข้ามการอัพเดท Firestore');
+          }
+        } catch (e) {
+          print('เกิดข้อผิดพลาดในการตรวจสอบหรืออัพเดทข้อมูลการจอง: $e');
+          // ยังคงถือว่าบันทึกสำเร็จในแอป แม้จะล้มเหลวในการอัพเดท Firestore
+        }
+      } else {
+        print('bookingId เป็นค่าว่าง ข้ามการอัพเดท Firestore');
+      }
 
       setState(() {
         _hasCheckedOut = true;
         _isLoading = false;
       });
+      print('อัพเดทสถานะ UI: hasCheckedOut=true');
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('เช็คเอาท์สำเร็จ'),
+          content: Text(widget.bookingId.isEmpty
+              ? 'เช็คเอาท์สำเร็จ (บันทึกเฉพาะในอุปกรณ์)'
+              : 'เช็คเอาท์สำเร็จ'),
           backgroundColor: Colors.green,
         ),
       );
+      print('การเช็คเอาท์เสร็จสมบูรณ์');
     } catch (e) {
-      print('Error during checkout: $e');
+      print('เกิดข้อผิดพลาดในการเช็คเอาท์: $e');
       setState(() {
         _isLoading = false;
       });
@@ -421,7 +618,7 @@ class _TodayscreenState extends State<Todayscreen> {
       // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('เกิดข้อผิดพลาดในการเช็คเอาท์'),
+          content: Text('เกิดข้อผิดพลาดในการเช็คเอาท์: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -798,11 +995,28 @@ class _TodayscreenState extends State<Todayscreen> {
                                   });
                                 });
                               }
+                            } else if (!_hasCheckedIn) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'ไม่สามารถเช็คเอาท์ได้: ต้องเช็คอินก่อน'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            } else if (_hasCheckedOut) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('คุณได้เช็คเอาท์ไปแล้ว'),
+                                  backgroundColor: Colors.orange,
+                                ),
+                              );
                             }
 
                             // รีเซ็ต slider
                             Future.delayed(Duration(seconds: 1), () {
-                              key.currentState!.reset();
+                              if (key.currentState != null) {
+                                key.currentState!.reset();
+                              }
                             });
                           },
                           enabled: _hasCheckedIn && !_hasCheckedOut,
@@ -816,7 +1030,7 @@ class _TodayscreenState extends State<Todayscreen> {
                           ),
                         );
                       }),
-                    )
+                    ),
                   ],
                 ),
               ),

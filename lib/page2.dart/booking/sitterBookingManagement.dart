@@ -288,54 +288,6 @@ class _SitterBookingManagementState extends State<SitterBookingManagement> {
         ),
         const SizedBox(height: 16),
 
-        // เพิ่มเมนูเช็คลิสต์การดูแลแมว
-        _buildOptionCard(
-          'เช็คลิสต์การดูแลแมว',
-          'บันทึกกิจกรรมที่ทำและถ่ายรูปการดูแลแมว',
-          Icons.checklist,
-          Colors.purple,
-          () {
-            // ดึงรายการการจองที่กำลังดำเนินการหรือได้รับการยืนยันแล้ว
-            FirebaseFirestore.instance
-                .collection('bookings')
-                .where('sitterId', isEqualTo: _auth.currentUser?.uid)
-                .where('status', whereIn: ['confirmed', 'in_progress'])
-                .orderBy('createdAt', descending: true)
-                .limit(1)
-                .get()
-                .then((snapshot) {
-                  if (snapshot.docs.isNotEmpty) {
-                    String bookingId = snapshot.docs.first.id;
-                    print(
-                        "Navigating to checklist for booking: $bookingId"); // เพิ่มการพิมพ์เพื่อตรวจสอบ
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => SitterChecklistPage(
-                          bookingId: bookingId,
-                        ),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'ไม่พบการจองที่กำลังดำเนินการหรือยืนยันแล้ว')),
-                    );
-                  }
-                })
-                .catchError((error) {
-                  print(
-                      "Error finding bookings: $error"); // เพิ่มการพิมพ์ข้อผิดพลาด
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล: $error')),
-                  );
-                });
-          },
-        ),
-        const SizedBox(height: 16),
-
         // ตารางงานและรายได้ (รักษาคาร์ดเดิมไว้)
         _buildOptionCard(
           'ตารางงานและรายได้',
