@@ -70,6 +70,19 @@ console.log(`Found ${expiredRequests.length} expired requests`);
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       isRead: false,
     };
+    // เพิ่มการแจ้งเตือนในระบบหลักเมื่อคำขอหมดเวลา
+// เพิ่มการแจ้งเตือนเมื่อคำขอหมดเวลา
+const mainNotification = {
+  title: "คำขอหมดอายุ",
+  message: bookingId,
+  timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  isRead: false,
+};
+
+const mainNotifRef = admin.firestore()
+    .collection("notifications")
+    .doc();
+batch.set(mainNotifRef, mainNotification);
     
     // เพิ่มการแจ้งเตือนใน batch
     const userNotifRef = admin.firestore()
@@ -205,7 +218,7 @@ exports.watchNewBookings = functions.firestore
         
         // ถ้าไม่มี ให้ตั้งเวลาหมดอายุเป็น 15 นาทีจากปัจจุบัน
         const expirationTime = admin.firestore.Timestamp.fromDate(
-          new Date(Date.now() + 15 * 60 * 1000) // 15 นาที
+          new Date(Date.now() + 1 * 60 * 1000) // 15 นาที
         );
         
         await snapshot.ref.update({
@@ -248,7 +261,8 @@ exports.watchNewBookings = functions.firestore
   });
 // สร้างฟังก์ชัน HTTP สำหรับการทดสอบบน emulator
 exports.checkExpiredBookings = functions.pubsub
-  .schedule('every 1 minutes')
+  .schedule('every 20 seconds')
+  .timeZone('Asia/Bangkok') // ตั้งเวลาเป็นเขตเวลาของประเทศไทย
   .onRun(async (context) => {
     try {
       console.log("Starting expired bookings check...");

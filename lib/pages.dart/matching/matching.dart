@@ -519,7 +519,7 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       }
 
       // คำนวณเวลาหมดอายุ 15 นาทีจากเวลาปัจจุบัน
-      final DateTime expirationTime = DateTime.now().add(Duration(minutes: 15));
+      final DateTime expirationTime = DateTime.now().add(Duration(minutes: 1));
 
       // สร้างข้อมูลการจอง
       final bookingRequest = {
@@ -549,10 +549,11 @@ class _SearchSittersScreenState extends State<SearchSittersScreen> {
       );
 
       // แจ้งเตือนในแอป (local notification) สำหรับผู้ใช้ปัจจุบัน
+      // ค้นหาบริเวณส่งการแจ้งเตือนในแอป
       NotifiationServices().sendCustomNotification(
         title: 'สร้างคำขอสำเร็จ',
         body:
-            'คำขอของคุณจะหมดอายุในเวลา ${DateFormat('HH:mm').format(expirationTime)}',
+            'คำขอของคุณจะหมดอายุใน 1 นาที (${DateFormat('HH:mm').format(expirationTime)})',
       );
 
       setState(() => _isLoading = false);

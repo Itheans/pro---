@@ -24,7 +24,7 @@ class ScheduledTasksManager {
       _checkExpiredBookings();
 
       // ลดเวลาตรวจสอบเป็นทุกๆ 1 นาที
-      _expiredBookingsTimer = Timer.periodic(Duration(minutes: 1), (timer) {
+      _expiredBookingsTimer = Timer.periodic(Duration(seconds: 20), (timer) {
         _checkExpiredBookings();
       });
 

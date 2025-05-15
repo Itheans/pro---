@@ -116,6 +116,21 @@ class _AdminNotificationsPageState extends State<AdminNotificationsPage> {
     }
   }
 
+  Future<void> sendBookingExpiredNotification({
+    required String bookingId,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('notifications').add({
+        'title': 'คำขอหมดอายุ',
+        'message': bookingId,
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false
+      });
+    } catch (e) {
+      print('Error sending booking expired notification: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(

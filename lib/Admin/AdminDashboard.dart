@@ -123,7 +123,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         // อัพเดตสถานะเป็น expired
         batch.update(doc.reference, {
           'status': 'expired',
-          'cancelReason': 'คำขอหมดเวลาอัตโนมัติหลังจาก 15 นาที',
+          'cancelReason': 'คำขอหมดเวลาอัตโนมัติหลังจาก 1 นาที',
           'updatedAt': FieldValue.serverTimestamp(),
         });
 

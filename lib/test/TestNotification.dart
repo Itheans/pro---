@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:myproject/Local_Noti/NotiClass.dart';
 import 'package:myproject/Admin/NotificationService.dart';
@@ -29,21 +30,29 @@ class TestNotificationScreen extends StatelessWidget {
             SizedBox(height: 20),
             ElevatedButton(
               onPressed: () async {
-                final user = FirebaseAuth.instance.currentUser;
-                if (user != null) {
-                  await _firebaseNoti.sendBookingStatusNotification(
-                    userId: user.uid,
-                    bookingId: 'test_booking_id',
-                    status: 'pending',
-                    message: 'นี่คือการทดสอบการแจ้งเตือน Firebase',
-                  );
-                } else {
+                try {
+                  // เพิ่มการแจ้งเตือนใน admin_notifications
+                  await FirebaseFirestore.instance
+                      .collection('admin_notifications')
+                      .add({
+                    'title': 'ทดสอบการแจ้งเตือน',
+                    'message': 'นี่คือการทดสอบการแจ้งเตือนสำหรับ Admin',
+                    'type': 'booking_expired',
+                    'timestamp': FieldValue.serverTimestamp(),
+                    'isRead': false,
+                  });
+
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('กรุณาเข้าสู่ระบบก่อน')),
+                    SnackBar(
+                        content: Text('ส่งการแจ้งเตือนไปยัง Admin สำเร็จ')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
                   );
                 }
               },
-              child: Text('ทดสอบการแจ้งเตือน Firebase'),
+              child: Text('ทดสอบการแจ้งเตือน Admin'),
             ),
           ],
         ),
