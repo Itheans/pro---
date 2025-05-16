@@ -1263,42 +1263,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           },
           badgeCount: _expiredBookingsCount,
         ),
-        // เพิ่มเมนูจัดการเช็คลิสต์
-        _buildManagementCard(
-          'ตรวจสอบเช็คลิสต์',
-          'ดูรายละเอียดการดูแลแมวจากเช็คลิสต์ของผู้รับเลี้ยง',
-          Icons.checklist,
-          Colors.teal,
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChecklistManagementPage(),
-              ),
-            );
-          },
-        ),
-        SizedBox(height: 8),
 
         // เพิ่มปุ่มตรวจสอบคำขอหมดเวลาทันที
         SizedBox(height: 20),
-        Container(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _checkExpiredBookingsManually,
-            icon: Icon(Icons.refresh),
-            label: Text('ตรวจสอบคำขอหมดเวลาทันที'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue.shade700,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.symmetric(vertical: 15),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              elevation: 2,
-            ),
-          ),
-        ),
       ],
     );
   }
